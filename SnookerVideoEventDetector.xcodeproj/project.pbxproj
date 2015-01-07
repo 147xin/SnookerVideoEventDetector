@@ -7,7 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5A606AB31A47F457004BAE0E /* SnookerVideoEventDetector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5A606AB21A47F457004BAE0E /* SnookerVideoEventDetector.cpp */; };
+		5A606ABA1A47FB91004BAE0E /* CommonStructure.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5A606AB41A47FB91004BAE0E /* CommonStructure.cpp */; };
+		5A606ABB1A47FB91004BAE0E /* ReplayDetector.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5A606AB61A47FB91004BAE0E /* ReplayDetector.cpp */; };
+		5A606ABC1A47FB91004BAE0E /* ShotCut.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5A606AB81A47FB91004BAE0E /* ShotCut.cpp */; };
+		5A606ABE1A48046B004BAE0E /* libopencv_video.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5A606ABD1A48046B004BAE0E /* libopencv_video.dylib */; };
+		5A606AC01A4805BB004BAE0E /* libopencv_legacy.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5A606ABF1A4805BB004BAE0E /* libopencv_legacy.dylib */; };
 		5AC830D71A47C61E00B19B0D /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5AC830D61A47C61E00B19B0D /* main.cpp */; };
+		5AC830E01A47C73900B19B0D /* libopencv_core.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AC830DD1A47C73900B19B0D /* libopencv_core.dylib */; };
+		5AC830E11A47C73900B19B0D /* libopencv_highgui.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AC830DE1A47C73900B19B0D /* libopencv_highgui.dylib */; };
+		5AC830E21A47C73900B19B0D /* libopencv_imgproc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5AC830DF1A47C73900B19B0D /* libopencv_imgproc.dylib */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -23,8 +32,21 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5A606AB21A47F457004BAE0E /* SnookerVideoEventDetector.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = SnookerVideoEventDetector.cpp; sourceTree = "<group>"; wrapsLines = 0; };
+		5A606AB41A47FB91004BAE0E /* CommonStructure.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = CommonStructure.cpp; sourceTree = "<group>"; };
+		5A606AB51A47FB91004BAE0E /* CommonStructure.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = CommonStructure.h; sourceTree = "<group>"; };
+		5A606AB61A47FB91004BAE0E /* ReplayDetector.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ReplayDetector.cpp; sourceTree = "<group>"; };
+		5A606AB71A47FB91004BAE0E /* ReplayDetector.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ReplayDetector.h; sourceTree = "<group>"; };
+		5A606AB81A47FB91004BAE0E /* ShotCut.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ShotCut.cpp; sourceTree = "<group>"; };
+		5A606AB91A47FB91004BAE0E /* ShotCut.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ShotCut.h; sourceTree = "<group>"; };
+		5A606ABD1A48046B004BAE0E /* libopencv_video.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_video.dylib; path = ../../../../usr/local/Cellar/opencv/2.4.9/lib/libopencv_video.dylib; sourceTree = "<group>"; };
+		5A606ABF1A4805BB004BAE0E /* libopencv_legacy.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_legacy.dylib; path = ../../../../usr/local/Cellar/opencv/2.4.9/lib/libopencv_legacy.dylib; sourceTree = "<group>"; };
 		5AC830D31A47C61D00B19B0D /* SnookerVideoEventDetector */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = SnookerVideoEventDetector; sourceTree = BUILT_PRODUCTS_DIR; };
 		5AC830D61A47C61E00B19B0D /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		5AC830DD1A47C73900B19B0D /* libopencv_core.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_core.dylib; path = ../../../../usr/local/lib/libopencv_core.dylib; sourceTree = "<group>"; };
+		5AC830DE1A47C73900B19B0D /* libopencv_highgui.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_highgui.dylib; path = ../../../../usr/local/lib/libopencv_highgui.dylib; sourceTree = "<group>"; };
+		5AC830DF1A47C73900B19B0D /* libopencv_imgproc.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libopencv_imgproc.dylib; path = ../../../../usr/local/lib/libopencv_imgproc.dylib; sourceTree = "<group>"; };
+		5AC830E31A47C80300B19B0D /* SnookerVideoEventDetector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SnookerVideoEventDetector.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -32,6 +54,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A606ABE1A48046B004BAE0E /* libopencv_video.dylib in Frameworks */,
+				5A606AC01A4805BB004BAE0E /* libopencv_legacy.dylib in Frameworks */,
+				5AC830E01A47C73900B19B0D /* libopencv_core.dylib in Frameworks */,
+				5AC830E11A47C73900B19B0D /* libopencv_highgui.dylib in Frameworks */,
+				5AC830E21A47C73900B19B0D /* libopencv_imgproc.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -41,6 +68,11 @@
 		5AC830CA1A47C61D00B19B0D = {
 			isa = PBXGroup;
 			children = (
+				5A606ABF1A4805BB004BAE0E /* libopencv_legacy.dylib */,
+				5A606ABD1A48046B004BAE0E /* libopencv_video.dylib */,
+				5AC830DD1A47C73900B19B0D /* libopencv_core.dylib */,
+				5AC830DE1A47C73900B19B0D /* libopencv_highgui.dylib */,
+				5AC830DF1A47C73900B19B0D /* libopencv_imgproc.dylib */,
 				5AC830D51A47C61D00B19B0D /* SnookerVideoEventDetector */,
 				5AC830D41A47C61D00B19B0D /* Products */,
 			);
@@ -57,7 +89,15 @@
 		5AC830D51A47C61D00B19B0D /* SnookerVideoEventDetector */ = {
 			isa = PBXGroup;
 			children = (
+				5A606AB41A47FB91004BAE0E /* CommonStructure.cpp */,
+				5A606AB51A47FB91004BAE0E /* CommonStructure.h */,
+				5A606AB61A47FB91004BAE0E /* ReplayDetector.cpp */,
+				5A606AB71A47FB91004BAE0E /* ReplayDetector.h */,
+				5A606AB81A47FB91004BAE0E /* ShotCut.cpp */,
+				5A606AB91A47FB91004BAE0E /* ShotCut.h */,
 				5AC830D61A47C61E00B19B0D /* main.cpp */,
+				5AC830E31A47C80300B19B0D /* SnookerVideoEventDetector.h */,
+				5A606AB21A47F457004BAE0E /* SnookerVideoEventDetector.cpp */,
 			);
 			path = SnookerVideoEventDetector;
 			sourceTree = "<group>";
@@ -118,7 +158,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5A606AB31A47F457004BAE0E /* SnookerVideoEventDetector.cpp in Sources */,
 				5AC830D71A47C61E00B19B0D /* main.cpp in Sources */,
+				5A606ABB1A47FB91004BAE0E /* ReplayDetector.cpp in Sources */,
+				5A606ABC1A47FB91004BAE0E /* ShotCut.cpp in Sources */,
+				5A606ABA1A47FB91004BAE0E /* CommonStructure.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -202,6 +246,15 @@
 		5AC830DB1A47C61E00B19B0D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					/usr/local/include,
+					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/usr/local/lib,
+					/usr/local/Cellar/opencv/2.4.9/lib,
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -209,6 +262,15 @@
 		5AC830DC1A47C61E00B19B0D /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					/usr/local/include,
+					/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include,
+				);
+				LIBRARY_SEARCH_PATHS = (
+					/usr/local/lib,
+					/usr/local/Cellar/opencv/2.4.9/lib,
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
@@ -232,6 +294,7 @@
 				5AC830DC1A47C61E00B19B0D /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="CIDR_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$" />
+    <content url="file:///usr/local/Cellar/opencv/2.4.9/lib/libopencv_legacy.dylib">
+      <sourceFolder url="file:///usr/local/Cellar/opencv/2.4.9/lib/libopencv_legacy.dylib" isTestSource="false" />
+    </content>
+    <content url="file:///usr/local/Cellar/opencv/2.4.9/lib/libopencv_video.dylib">
+      <sourceFolder url="file:///usr/local/Cellar/opencv/2.4.9/lib/libopencv_video.dylib" isTestSource="false" />
+    </content>
+    <content url="file:///usr/local/lib/libopencv_core.dylib">
+      <sourceFolder url="file:///usr/local/lib/libopencv_core.dylib" isTestSource="false" />
+    </content>
+    <content url="file:///usr/local/lib/libopencv_highgui.dylib">
+      <sourceFolder url="file:///usr/local/lib/libopencv_highgui.dylib" isTestSource="false" />
+    </content>
+    <content url="file:///usr/local/lib/libopencv_imgproc.dylib">
+      <sourceFolder url="file:///usr/local/lib/libopencv_imgproc.dylib" isTestSource="false" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
+

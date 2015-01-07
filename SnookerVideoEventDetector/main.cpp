@@ -6,10 +6,34 @@
 //  Copyright (c) 2014年 Yixin Huang. All rights reserved.
 //
 
-#include <iostream>
+#include "SnookerVideoEventDetector.h"
 
-int main(int argc, const char * argv[]) {
-    // insert code here...
-    std::cout << "Hello, World!\n";
+int main(int argc, const char *argv[]) {
+    SnookerVideoEventDetector detector;
+    detector.SetVideoFilePath("/Users/hix/Desktop/SnookerVideoEventDetection/"
+            "SnookerVideos/Murphy147/");
+
+    //detector.GetVideoFrames("/Users/hix/Desktop/SnookerVideoEventDetection/"
+    //                        "TestReplayDetection/Frames1/");
+    //为节省测试时间, 这里不再重复获取视频帧, 直接设置帧图像文件夹、帧率和总帧数、视频尺寸
+    detector.videoInfo.framesFolder = "/Users/hix/Desktop/SnookerVideoEventDetection/TestReplayDetection/Frames1/";
+    detector.videoInfo.fps = 30;
+    detector.videoInfo.framesNum = 19772;
+    detector.videoInfo.width = 1105;
+    detector.videoInfo.height = 622;
+
+    detector.SetReplayDetectorOutputPath("/Users/hix/Desktop/"
+            "SnookerVideoEventDetection/"
+            "TestReplayDetection/Output/");
+    //detector.GetReplayInfo(); //节省调试时间, 暂时注释掉
+    //读取回放信息
+    detector.ReadReplayInfo();
+    //获取比分条位置
+    detector.GetScorebarRegion();
+    //获取当前击球球员指示符位置
+    detector.GetCurrentPlayerFlagPos();
+    //获取每一样本帧的特征
+    detector.GetVideoFramesFeature();
+
     return 0;
 }
