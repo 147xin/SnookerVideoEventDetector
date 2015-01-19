@@ -13,10 +13,11 @@ using namespace cv;
 
 //#define DEBUG_FULL_TABLE_VIEW_DETECTION
 //#define DEBUG_SCORE_BAR_DETECTION
-#define DEBUG_TURN_INDICATOR
+//#define DEBUG_TURN_INDICATOR
 
 #define GREEN_THRESHOLD 20
 
+bool frameFeaturesDetectionStarted = false;
 
 void SnookerVideoEventDetector::SetVideoFilePath(const std::string &videoPath) {
     videoInfo.videoFilePath = videoPath;
@@ -95,18 +96,18 @@ void SnookerVideoEventDetector::GetReplayInfo() {
     //切变与渐变的检测
     CShotCut shotcut;
     shotcut.SetPath((char *) videoInfo.framesFolder.c_str(),
-            videoInfo.framesNum);
+                    videoInfo.framesNum);
     shotcut.ShotDetection();
     shotcut.SaveInfo((char *) videoInfo.cutPath.c_str(),
-            (char *) videoInfo.gtPath.c_str());
+                     (char *) videoInfo.gtPath.c_str());
 
     //回放检测
     CReplayDetector replayDetector;
 
     //设置渐变/切变/帧图像文件夹路径
     replayDetector.SetPath((char *) videoInfo.gtPath.c_str(),
-            (char *) videoInfo.cutPath.c_str(),
-            (char *) videoInfo.framesFolder.c_str());
+                           (char *) videoInfo.cutPath.c_str(),
+                           (char *) videoInfo.framesFolder.c_str());
     //设置视频总帧数
     replayDetector.SetVideoFrames(videoInfo.framesNum);
     //读取切变信息, 渐变信息在isReplayExist函数中读取
@@ -140,7 +141,7 @@ void SnookerVideoEventDetector::ReadReplayInfo() {
     string line;
     while (getline(ifs, line) && !boost::trim_copy(line).empty()) {
         stringstream lineStream(line);
-        int start, length;
+        int start = 0, length = 0;
         ReplayInfo replayInfo;
         lineStream >> start >> length;
         replayInfo.start.nStart = start;
@@ -168,8 +169,10 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
     imgPath += "frame" + to_string(currentFrameNum) + ".jpg";
     Mat srcImg = imread(imgPath);
 //#ifdef DEBUG_FULL_TABLE_VIEW_DETECTION
-    //imshow("Image", srcImg);
-    //waitKey(0);
+    if (frameFeaturesDetectionStarted) {
+        imshow("Image", srcImg);
+        waitKey(0);
+    }
 //#endif
 
     //创建用于存储台面区域的图像
@@ -236,20 +239,20 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
     bool isFullTableView =
             IsFullTableView(lines, Size(srcImg.cols, srcImg.rows));
     frameFeature.isFullTable = isFullTableView;
-    cout << "Frame " << currentFrameNum << " is" << (isFullTableView ? "" : " NOT")
-            << " full table view." << endl;
+    //cout << "Frame " << currentFrameNum << " is" << (isFullTableView ? "" : " NOT")
+    //        << " full table view." << endl;
 
     //如果是全台面视角，则进行比分条提取
     if (isFullTableView) {
         //如果是全台面视角, 并且之前没有确定过比分条区域, 则开始寻找比分条区域
-        if (videoInfo.scorebarRegion.x == 0) { //还没有确定比分条区域
+        if (0 == videoInfo.scorebarRegion.x) { //还没有确定比分条区域
             //求直线的交点
             int lineNum = static_cast<int>(lines.size());
             vector<Point> points; //存放直线的交点集合
             for (int i = 0; i < lineNum; ++i) {
                 for (int j = i + 1; j < lineNum; ++j) {
                     IntersectionPoint(lines[i], lines[j], points, srcImg.rows,
-                            srcImg.cols);
+                                      srcImg.cols);
                 }
             }
 
@@ -419,9 +422,9 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
             }
             //如果最大值小于一个阈值，说明这个区域并没有比分条
             if (avg * 1.0 < barSize.width * 10) {
-                cout << "Frame " << currentFrameNum << " has no score bar!" << endl;
+                //cout << "Frame " << currentFrameNum << " has no score bar!" << endl;
                 frameFeature.hasScoreBar = false;
-                videoInfo.frameFeatures.push_back(frameFeature);
+                //videoInfo.frameFeatures.push_back(frameFeature);
                 return;
             }
             //frameFeature.hasScoreBar=true; //这个时候还不能判定是否含有比分条, 因为是否含有合法的字段还无法获知
@@ -571,13 +574,14 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
                     sum += row[j];
                 }
             }
-            cout << "Frame " << currentFrameNum << " vertical sums:" << endl;
-            for (int value : verticalSums) {
-                cout << value << endl;
-            }
+
+//            cout << "Frame " << currentFrameNum << " vertical sums:" << endl;
+//            for (int value : verticalSums) {
+//                cout << value << endl;
+//            }
             //均值
             int verticalSumsAvg = sum / barWidth;
-            cout << "average: " << verticalSumsAvg << endl;
+            //cout << "average: " << verticalSumsAvg << endl;
             //将小于阈值的值置为0
             int cutThreshold = 2 * 255;
             for (int &value : verticalSums) {
@@ -585,35 +589,12 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
                     value = 0;
                 }
             }
-            cout << "Frame " << currentFrameNum << " modified vertical sums:" << endl;
-            for (int value : verticalSums) {
-                cout << value << endl;
-            }
+//            cout << "Frame " << currentFrameNum << " modified vertical sums:" << endl;
+//            for (int value : verticalSums) {
+//                cout << value << endl;
+//            }
 
-            //判定当前击球球员指示符在哪一侧
-            int leftSum = 0, rightSum = 0;
-            for (int i = videoInfo.currentPlayerFlagPos[0][0]; i <= videoInfo.currentPlayerFlagPos[0][1]; ++i) {
-                leftSum += verticalSums[i];
-            }
-            for (int i = videoInfo.currentPlayerFlagPos[1][0]; i <= videoInfo.currentPlayerFlagPos[1][1]; ++i) {
-                rightSum += verticalSums[i];
-            }
-            if (leftSum > rightSum) {
-                frameFeature.turn = 0;
-            }
-            else if (leftSum < rightSum) {
-                frameFeature.turn = 1;
-            }
-            else {
-                frameFeature.turn = -1;
-            }
-            //将指示符处的值置为0
-            for (int i = videoInfo.currentPlayerFlagPos[0][0]; i <= videoInfo.currentPlayerFlagPos[0][1]; ++i) {
-                verticalSums[i] = 0;
-            }
-            for (int i = videoInfo.currentPlayerFlagPos[1][0]; i <= videoInfo.currentPlayerFlagPos[1][1]; ++i) {
-                verticalSums[i] = 0;
-            }
+
             //开始垂直分割图像
             int gapThreshold = (int) (barHeight * 0.1);       //文字间隔阈值
             int textWidthThreshold = (int) (barHeight * 0.3); //文字宽度阈值
@@ -674,10 +655,10 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
             }
 
             //测试结果
-            cout << "Frame " << currentFrameNum << " text areas:" << endl;
-            for (bool value : textIndicator) {
-                cout << (value ? "#####" : "0") << endl;
-            }
+//            cout << "Frame " << currentFrameNum << " text areas:" << endl;
+//            for (bool value : textIndicator) {
+//                cout << (value ? "#####" : "0") << endl;
+//            }
 
             //确定各个字段的位置
             int maxFrameNumPos[2] = {0, 0};
@@ -790,19 +771,19 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
 
             //在原图上画线标示识别出的文字区域
             rectangle(scorebar1, Point(maxFrameNumPos[0], 0),
-                    Point(maxFrameNumPos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+                      Point(maxFrameNumPos[1], barHeight - 1), Scalar(0, 255, 0), 1);
             rectangle(scorebar1, Point(frameNum1Pos[0], 0),
-                    Point(frameNum1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+                      Point(frameNum1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
             rectangle(scorebar1, Point(frameNum2Pos[0], 0),
-                    Point(frameNum2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+                      Point(frameNum2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
             rectangle(scorebar1, Point(score1Pos[0], 0),
-                    Point(score1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+                      Point(score1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
             rectangle(scorebar1, Point(score2Pos[0], 0),
-                    Point(score2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+                      Point(score2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
             rectangle(scorebar1, Point(name1Pos[0], 0),
-                    Point(name1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+                      Point(name1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
             rectangle(scorebar1, Point(name2Pos[0], 0),
-                    Point(name2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+                      Point(name2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
 #ifdef DEBUG_SCORE_BAR_DETECTION
             imshow("Score Bar", scorebar1);
             waitKey(0);
@@ -838,34 +819,49 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
             //将比分条区域灰度化
             Mat scorebarCpy(videoInfo.scorebarRegion.height, videoInfo.scorebarRegion.width, CV_8U);
             cvtColor(scorebar, scorebarCpy, CV_BGR2GRAY, 1);
+
 #ifdef DEBUG_SCORE_BAR_DETECTION
             imshow("Score Bar Region", scorebarCpy);
             waitKey(0);
 #endif
+            if (frameFeaturesDetectionStarted) {
+                imshow("Score Bar Region", scorebarCpy);
+                waitKey(0);
+            }
+
+
             //对比分条区域进行边缘检测
             Mat barContours(videoInfo.scorebarRegion.height, videoInfo.scorebarRegion.width, CV_8U);
             Canny(
                     scorebarCpy, barContours, 200 /*125*/,
                     350); //这里边缘检测有点不准确！比如三角形的下边缘丢失！关于边缘检测两个阈值的含义，好好看看图像处理！
+
 #ifdef DEBUG_SCORE_BAR_DETECTION
             imshow("Score Bar Region", barContours);
             waitKey(0);
 #endif
+            if (frameFeaturesDetectionStarted) {
+                imshow("Contours", barContours);
+                waitKey(0);
+            }
             //除去边缘图像中的长水平与垂直线
             //对水平与垂直方向的梯度图像进行以直线型的开操作以获得长直线区域
             //再将原图像与该结果相减以去除长直线
-            Mat lineKernelX(1, (int) round(videoInfo.scorebarRegion.height * 0.3), CV_8U, Scalar(255));
-            Mat lineKernelY((int) round(videoInfo.scorebarRegion.height * 0.3), 1, CV_8U, Scalar(255));
+            Mat lineKernelX(1, (int) round(videoInfo.scorebarRegion.height * 0.5), CV_8U, Scalar(255));
+            Mat lineKernelY((int) round(videoInfo.scorebarRegion.height * 0.5), 1, CV_8U, Scalar(255));
             Mat lineX(videoInfo.scorebarRegion.height, videoInfo.scorebarRegion.width, CV_8U);
             Mat lineY(videoInfo.scorebarRegion.height, videoInfo.scorebarRegion.width, CV_8U);
 
             erode(barContours, lineX, lineKernelX);
             dilate(lineX, lineX, lineKernelX);
 
+            Mat barContoursNew = barContours - lineX;
+            if (frameFeaturesDetectionStarted) {
+                imshow("Removing horizontal long lines", barContoursNew);
+                waitKey(0);
+            }
 
-            Mat barContoursNew = barContours - lineX; //暂时不减去垂直长直线
-            //      imshow("Score Bar Region", barContoursCpy);
-            //      waitKey(0);
+
 
             //用洪泛法填充与边缘连接的区域，比如长竖线
             uchar *row = barContoursNew.ptr<uchar>(0);
@@ -880,38 +876,70 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
                     floodFill(barContoursNew, Point(i, videoInfo.scorebarRegion.height - 1), 0);
                 }
             }
-            //            imshow("Score Bar Region", barContoursNew);
-            //            waitKey(0);
-            int lineSELen = (int) round(videoInfo.scorebarRegion.height * 0.5);
-            //保证长度是奇数
-            if (lineSELen % 2 == 0) {
-                ++lineSELen;
+            if (frameFeaturesDetectionStarted) {
+                imshow("Removing vertical long lines", barContoursNew);
+                waitKey(0);
             }
-            Mat lineSE(1, lineSELen, CV_8U, Scalar(0));
-            lineSE.ptr<uchar>(0)[lineSELen / 2 + 1] = 255;
-            //      imshow("lineSE", lineSE);
-            //      waitKey(0);
-            //对边界图像进行模板匹配，找出孤立的竖直线
-            Mat matchResult;
-            matchTemplate(barContoursNew, lineSE, matchResult, CV_TM_SQDIFF);
-            //      imshow("matchResult", matchResult);
-            //      waitKey(0);
-            matchResult.convertTo(matchResult, CV_8U);
-            matchResult.convertTo(matchResult, CV_8U, -1, 255);
-            //      imshow("matchResult", matchResult);
-            //      waitKey(0);
+
+            erode(barContours, lineY, lineKernelY);
+            dilate(lineY, lineY, lineKernelY);
+
+            //只在中间一段比分区域中进行垂直长直线的去除
+            //构造一个mask
+            Mat mask(videoInfo.scorebarRegion.height, videoInfo.scorebarRegion.width, CV_8U);
+            for (int i = 0; i < videoInfo.scorebarRegion.height; ++i) {
+                uchar *aRow = mask.ptr<uchar>(i);
+                for (int j = (int) (videoInfo.scorebarRegion.width * 0.35);
+                     j < (int) (videoInfo.scorebarRegion.width * 0.65); ++j) {
+                    aRow[j] = 255;
+                }
+            }
+
+            subtract(barContoursNew, lineY, barContoursNew, mask);
+            //barContoursNew = barContoursNew - lineY;
+
+            if (frameFeaturesDetectionStarted) {
+                imshow("Removing vertical long lines - final", barContoursNew);
+                waitKey(0);
+            }
+
+
+            //匹配垂直长直线，使用模板匹配法，存在问题，暂时不用
+            //这里存在严重问题！！！匹配的结果比原来需要去掉的边缘要短！！！需要膨胀！
+//            int lineSELen = (int) round(videoInfo.scorebarRegion.height * 0.5);
+//            //保证长度是奇数
+//            if (lineSELen % 2 == 0) {
+//                ++lineSELen;
+//            }
+//            Mat lineSE(1, lineSELen, CV_8U, Scalar(0));
+//            lineSE.ptr<uchar>(0)[lineSELen / 2 + 1] = 255;
+//            //      imshow("lineSE", lineSE);
+//            //      waitKey(0);
+//            //对边界图像进行模板匹配，找出孤立的竖直线
+//            Mat matchResult;
+//            matchTemplate(barContoursNew, lineSE, matchResult, CV_TM_SQDIFF);
+//
+//            imshow("matchResult", matchResult);
+//            waitKey(0);
+//
+//            matchResult.convertTo(matchResult, CV_8U);
+//            matchResult.convertTo(matchResult, CV_8U, -1, 255);
+//
+//            imshow("matchResult", matchResult);
+//            waitKey(0);
+
             //上面的直线匹配图像比原边缘图像略小，相减之前需要取得原边缘图像的子区域
-            Mat barContoursNewRoi = barContoursNew(
-                    Rect(lineSELen / 2 + 1, 0, videoInfo.scorebarRegion.width - lineSELen + 1, videoInfo.scorebarRegion.height));
+            //Mat barContoursNewRoi = barContoursNew(
+            //        Rect(lineSELen / 2 + 1, 0, videoInfo.scorebarRegion.width - lineSELen + 1, videoInfo.scorebarRegion.height));
             //      imshow("barContoursNewRoi", barContoursNewRoi);
             //      waitKey(0);
 
             // Mat test(barHeight, barWidth-lineSELen+1, CV_8U,Scalar(255));
 
-            // barContoursNewRoi.convertTo(barContoursNewRoi,-1,-1,255);
-            barContoursNewRoi = barContoursNewRoi - matchResult;
-            //      imshow("Contours", barContoursNew);
-            //      waitKey(0);
+            //barContoursNewRoi = barContoursNewRoi - matchResult;
+
+            //imshow("Removing vertical long lines", barContoursNew);
+            //waitKey(0);
             //            Mat barContoursNewEroded(barSize.height, barSize.width,
             //            CV_8U);
             //            erode(barContoursNew, barContoursNewEroded, lineSE);
@@ -920,6 +948,38 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
             //            barContoursNew = barContoursNew-barContoursNewEroded;
             //            imshow("barContoursNew", barContoursNew);
             //            waitKey(0);
+
+
+            //统计边缘图像在水平方向的投影值数组
+            vector<int> horizontalSum((vector<int>::size_type) videoInfo.scorebarRegion.height, 0);
+            int sumX = 0;
+            for (int i = 0; i < videoInfo.scorebarRegion.height; ++i) {
+                uchar *row = barContoursNew.ptr<uchar>(i);
+                for (int j = 0; j < videoInfo.scorebarRegion.width; ++j) {
+                    horizontalSum[i] += row[j];
+                    sumX += row[j];
+                }
+            }
+            //测试，查看投影数组的值
+
+            //求均值
+            int avg = sumX / videoInfo.scorebarRegion.height;
+            //求最大值
+            int maxValue = 0;
+            for (int i = 0; i < horizontalSum.size(); ++i) {
+                if (horizontalSum[i] > maxValue) {
+                    maxValue = horizontalSum[i];
+                }
+            }
+            //如果最大值小于一个阈值，说明这个区域并没有比分条
+            if (avg * 1.0 < videoInfo.scorebarRegion.width * 10) {
+                //cout << "Frame " << currentFrameNum << " has no score bar!" << endl;
+                frameFeature.hasScoreBar = false;
+                //videoInfo.frameFeatures.push_back(frameFeature);
+                return;
+            }
+
+
 
             //用Sobel算子进行梯度强度检测
             Mat sobelX(videoInfo.scorebarRegion.height, videoInfo.scorebarRegion.width, CV_16S);
@@ -931,40 +991,65 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
             minMaxLoc(sobel1, 0, &sobmax);
             sobel1.convertTo(sobel1, CV_8U, 255.0 / sobmax, 0);
 
-            //      imshow("Contours", sobel1);
-            //      waitKey(0);
+            if (frameFeaturesDetectionStarted) {
+                imshow("Contours", sobel1);
+                waitKey(0);
+            }
 
             //统计边缘梯度图像在垂直方向上的投影值
             vector<int> verticalSums((unsigned long) videoInfo.scorebarRegion.width, 0);
-            int sum = 0;
+            int sumY = 0;
             for (int i = 0; i < videoInfo.scorebarRegion.height; ++i) {
                 uchar *aRow = sobel1.ptr<uchar>(i);
                 for (int j = 0; j < videoInfo.scorebarRegion.width; ++j) {
-                    //                    if (row[j]) {
-                    //                        ++x[i];
-                    //                        ++sum;
-                    //                    }
                     verticalSums[j] += aRow[j];
-                    sum += aRow[j];
+                    sumY += aRow[j];
                 }
             }
-            cout << "Frame " << currentFrameNum << " vertical sums:" << endl;
-            for (int value : verticalSums) {
-                cout << value << endl;
-            }
+            //测试投影值
+//            cout << "Frame " << currentFrameNum << " vertical sums:" << endl;
+//            for (int value : verticalSums) {
+//                cout << value << endl;
+//            }
             //均值
-            int verticalSumsAvg = sum / videoInfo.scorebarRegion.width;
-            cout << "average: " << verticalSumsAvg << endl;
+            int verticalSumsAvg = sumY / videoInfo.scorebarRegion.width;
+            //cout << "average: " << verticalSumsAvg << endl;
             //将小于阈值的值置为0
-            int cutThreshold = 2 * 255;
+            int cutThreshold = 3 * 255;  //这个阈值有待斟酌！！！
             for (int &value : verticalSums) {
                 if (value < cutThreshold) {
                     value = 0;
                 }
             }
-            cout << "Frame " << currentFrameNum << " modified vertical sums:" << endl;
-            for (int value : verticalSums) {
-                cout << value << endl;
+//            cout << "Frame " << currentFrameNum << " modified vertical sums:" << endl;
+//            for (int value : verticalSums) {
+//                cout << value << endl;
+//            }
+
+
+            //判定当前击球球员指示符在哪一侧
+            int leftSum = 0, rightSum = 0;
+            for (int i = videoInfo.currentPlayerFlagPos[0][0]; i <= videoInfo.currentPlayerFlagPos[0][1]; ++i) {
+                leftSum += verticalSums[i];
+            }
+            for (int i = videoInfo.currentPlayerFlagPos[1][0]; i <= videoInfo.currentPlayerFlagPos[1][1]; ++i) {
+                rightSum += verticalSums[i];
+            }
+            if (leftSum > rightSum) {  // FIXME 这里加一个阈值更好吧，例如leftSum-rightSum>Thresh
+                frameFeature.turn = 0;
+            }
+            else if (leftSum < rightSum) {
+                frameFeature.turn = 1;
+            }
+            else {
+                frameFeature.turn = -1;
+            }
+            //将指示符处的值置为0
+            for (int i = videoInfo.currentPlayerFlagPos[0][0]; i <= videoInfo.currentPlayerFlagPos[0][1]; ++i) {
+                verticalSums[i] = 0;
+            }
+            for (int i = videoInfo.currentPlayerFlagPos[1][0]; i <= videoInfo.currentPlayerFlagPos[1][1]; ++i) {
+                verticalSums[i] = 0;
             }
 
             //开始垂直分割图像
@@ -1006,31 +1091,31 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
             //        textIndicator[i]=true;
             //      }
 
-            //为防止球员姓名之间的间距过大导致姓名断开，将比分条左右半边大于一定阈值的空隙进行填补
-            //将填补区域限定在左边1/4和右边1/4
-            int nameGapFillThreshold = gapThreshold * 3;
-            int leftEnd = videoInfo.scorebarRegion.width / 4 - nameGapFillThreshold;
-            int rightEnd = videoInfo.scorebarRegion.width - nameGapFillThreshold;
+            //为防止球员姓名之间的间距过大导致姓名断开，以及比分断开，将比分条左右两边大于一定阈值的空隙进行填补
+            //将填补区域限定在左边40%和右边40%
+            int gapFillThreshold = gapThreshold * 4; //3倍仍然不够，11X时会断开，改成4试试
+            int leftEnd = (int) (videoInfo.scorebarRegion.width * 0.4 - gapFillThreshold);
+            int rightEnd = videoInfo.scorebarRegion.width - gapFillThreshold;
             for (int i = 0; i < leftEnd; ++i) {
-                if (textIndicator[i] && textIndicator[i + nameGapFillThreshold - 1]) {
-                    for (int j = i + 1; j < i + nameGapFillThreshold - 1; ++j) {
+                if (textIndicator[i] && textIndicator[i + gapFillThreshold - 1]) {
+                    for (int j = i + 1; j < i + gapFillThreshold - 1; ++j) {
                         textIndicator[j] = true;
                     }
                 }
             }
-            for (int i = videoInfo.scorebarRegion.width * 3 / 4; i < rightEnd; ++i) {
-                if (textIndicator[i] && textIndicator[i + nameGapFillThreshold - 1]) {
-                    for (int j = i + 1; j < i + nameGapFillThreshold - 1; ++j) {
+            for (int i = (int) (videoInfo.scorebarRegion.width * 0.6); i < rightEnd; ++i) {
+                if (textIndicator[i] && textIndicator[i + gapFillThreshold - 1]) {
+                    for (int j = i + 1; j < i + gapFillThreshold - 1; ++j) {
                         textIndicator[j] = true;
                     }
                 }
             }
 
             //测试结果
-            cout << "Frame " << currentFrameNum << " text areas:" << endl;
-            for (bool value : textIndicator) {
-                cout << (value ? "#####" : "0") << endl;
-            }
+//            cout << "Frame " << currentFrameNum << " text areas:" << endl;
+//            for (bool value : textIndicator) {
+//                cout << (value ? "#####" : "0") << endl;
+//            }
 
             //确定各个字段的位置
             int maxFrameNumPos[2] = {0, 0};
@@ -1141,25 +1226,46 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
                 name2Pos[1] = name2PosPlanB[1];
             }
 
-            //在原图上画线标示识别出的文字区域
-//            rectangle(scorebar1, Point(maxFrameNumPos[0], 0),
-//                    Point(maxFrameNumPos[1], barHeight - 1), Scalar(0, 255, 0), 1);
-//            rectangle(scorebar1, Point(frameNum1Pos[0], 0),
-//                    Point(frameNum1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
-//            rectangle(scorebar1, Point(frameNum2Pos[0], 0),
-//                    Point(frameNum2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
-//            rectangle(scorebar1, Point(score1Pos[0], 0),
-//                    Point(score1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
-//            rectangle(scorebar1, Point(score2Pos[0], 0),
-//                    Point(score2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
-//            rectangle(scorebar1, Point(name1Pos[0], 0),
-//                    Point(name1Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
-//            rectangle(scorebar1, Point(name2Pos[0], 0),
-//                    Point(name2Pos[1], barHeight - 1), Scalar(0, 255, 0), 1);
+            //在原图上画线标示识别出的文字区域，以及当前击球方
+            Mat scorebarTest = scorebar.clone();
+            rectangle(scorebarTest, Point(maxFrameNumPos[0], 0),
+                      Point(maxFrameNumPos[1], videoInfo.scorebarRegion.height - 1), Scalar(0, 255, 0), 1);
+            rectangle(scorebarTest, Point(frameNum1Pos[0], 0),
+                      Point(frameNum1Pos[1], videoInfo.scorebarRegion.height - 1), Scalar(0, 255, 0), 1);
+            rectangle(scorebarTest, Point(frameNum2Pos[0], 0),
+                      Point(frameNum2Pos[1], videoInfo.scorebarRegion.height - 1), Scalar(0, 255, 0), 1);
+            rectangle(scorebarTest, Point(score1Pos[0], 0),
+                      Point(score1Pos[1], videoInfo.scorebarRegion.height - 1), Scalar(0, 255, 0), 1);
+            rectangle(scorebarTest, Point(score2Pos[0], 0),
+                      Point(score2Pos[1], videoInfo.scorebarRegion.height - 1), Scalar(0, 255, 0), 1);
+            rectangle(scorebarTest, Point(name1Pos[0], 0),
+                      Point(name1Pos[1], videoInfo.scorebarRegion.height - 1), Scalar(0, 255, 0), 1);
+            rectangle(scorebarTest, Point(name2Pos[0], 0),
+                      Point(name2Pos[1], videoInfo.scorebarRegion.height - 1), Scalar(0, 255, 0), 1);
+            if (0 == frameFeature.turn) {
+                rectangle(scorebarTest,
+                          Point(videoInfo.currentPlayerFlagPos[0][0], 0),
+                          Point(videoInfo.currentPlayerFlagPos[0][1], videoInfo.scorebarRegion.height - 1),
+                          Scalar(0, 0, 255),
+                          1);
+            }
+            else if (1 == frameFeature.turn) {
+                rectangle(scorebarTest,
+                          Point(videoInfo.currentPlayerFlagPos[1][0], 0),
+                          Point(videoInfo.currentPlayerFlagPos[1][1], videoInfo.scorebarRegion.height - 1),
+                          Scalar(0, 0, 255),
+                          1);
+            }
+
 #ifdef DEBUG_SCORE_BAR_DETECTION
             imshow("Score Bar", scorebar1);
             waitKey(0);
 #endif
+
+            if (frameFeaturesDetectionStarted) {
+                imshow("Score Bar", scorebarTest);
+                waitKey(0);
+            }
             //如果这些区域都存在的话, 则保存此时的比分条区域
             if (maxFrameNumPos[0] && maxFrameNumPos[1]
                     && frameNum1Pos[0] && frameNum1Pos[1]
@@ -1185,12 +1291,261 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
                 //frameFeature.scorebarRegion = tmpScorebarRegion;
                 frameFeature.hasScoreBar = true;
             }
+
+            //获取各个字段的图片，然后OCR
+            tesseract::TessBaseAPI tessApi;
+            tessApi.Init(NULL, "eng", tesseract::OEM_DEFAULT);
+            tessApi.SetPageSegMode(tesseract::PSM_SINGLE_LINE);
+            tessApi.SetVariable("tessedit_char_whitelist", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.");
+
+            // 去除字符图片上下的杂边
+            int charRegionMargin = (int) round(videoInfo.scorebarRegion.height * 0.1);
+            int charRegionHeight = videoInfo.scorebarRegion.height - charRegionMargin * 2;
+
+            //球员名字1
+            Mat nameImg1 = scorebar(Rect(name1Pos[0],
+                                         charRegionMargin,
+                                         name1Pos[1] - name1Pos[0] + 1,
+                                         charRegionHeight));
+            //自适应阈值二值化
+            cvtColor(nameImg1, nameImg1, CV_BGR2GRAY, 1);
+            threshold(nameImg1, nameImg1, 0, 255, THRESH_BINARY | THRESH_OTSU);
+            if (frameFeaturesDetectionStarted) {
+                imshow("nameImg1", nameImg1);
+                waitKey(0);
+            }
+            tessApi.SetImage((const unsigned char *) nameImg1.data,
+                             nameImg1.cols,
+                             nameImg1.rows,
+                             nameImg1.channels(),
+                             nameImg1.step);
+            string nameText1 = tessApi.GetUTF8Text();
+            boost::trim(nameText1);
+
+            //球员名字2
+            Mat nameImg2 = scorebar(Rect(name2Pos[0],
+                                         charRegionMargin,
+                                         name2Pos[1] - name2Pos[0] + 1,
+                                         charRegionHeight));
+            //自适应阈值二值化
+            cvtColor(nameImg2, nameImg2, CV_BGR2GRAY, 1);
+            threshold(nameImg2, nameImg2, 0, 255, THRESH_BINARY | THRESH_OTSU);
+            if (frameFeaturesDetectionStarted) {
+                imshow("nameImg2", nameImg2);
+                waitKey(0);
+            }
+            tessApi.SetImage((const unsigned char *) nameImg2.data,
+                             nameImg2.cols,
+                             nameImg2.rows,
+                             nameImg2.channels(),
+                             nameImg2.step);
+            string nameText2 = tessApi.GetUTF8Text();
+            boost::trim(nameText2);
+
+            //下面仅识别数字
+            tessApi.SetVariable("tessedit_char_whitelist", "0123456789");
+            tessApi.SetPageSegMode(tesseract::PSM_SINGLE_WORD);
+
+
+
+            //当局比分1
+            Mat scoreImg1 = scorebar(Rect(score1Pos[0],
+                                          charRegionMargin,
+                                          score1Pos[1] - score1Pos[0] + 1,
+                                          charRegionHeight));
+            //自适应阈值二值化
+            cvtColor(scoreImg1, scoreImg1, CV_BGR2GRAY, 1);
+            threshold(scoreImg1, scoreImg1, 0, 255, THRESH_BINARY | THRESH_OTSU);
+            if (frameFeaturesDetectionStarted) {
+                imshow("scoreImg1", scoreImg1);
+                waitKey(0);
+            }
+
+            tessApi.SetImage((const unsigned char *) scoreImg1.data,
+                             scoreImg1.cols,
+                             scoreImg1.rows,
+                             scoreImg1.channels(),
+                             scoreImg1.step);
+            string scoreText1 = tessApi.GetUTF8Text();
+            boost::trim(scoreText1);
+
+            //当局比分2
+            Mat scoreImg2 = scorebar(Rect(score2Pos[0],
+                                          charRegionMargin,
+                                          score2Pos[1] - score2Pos[0] + 1,
+                                          charRegionHeight));
+            //自适应阈值二值化
+            cvtColor(scoreImg2, scoreImg2, CV_BGR2GRAY, 1);
+            threshold(scoreImg2, scoreImg2, 0, 255, THRESH_BINARY | THRESH_OTSU);
+
+            if (frameFeaturesDetectionStarted) {
+                imshow("scoreImg2", scoreImg2);
+                waitKey(0);
+            }
+
+            tessApi.SetImage((const unsigned char *) scoreImg2.data,
+                             scoreImg2.cols,
+                             scoreImg2.rows,
+                             scoreImg2.channels(),
+                             scoreImg2.step);
+            string scoreText2 = tessApi.GetUTF8Text();
+            boost::trim(scoreText2);
+
+            //局比分1
+            Mat frameScoreImg1 = scorebar(Rect(frameNum1Pos[0],
+                                               charRegionMargin,
+                                               frameNum1Pos[1] - frameNum1Pos[0] + 1,
+                                               charRegionHeight));
+            //自适应阈值二值化
+            cvtColor(frameScoreImg1, frameScoreImg1, CV_BGR2GRAY, 1);
+            threshold(frameScoreImg1, frameScoreImg1, 0, 255, THRESH_BINARY | THRESH_OTSU);
+            if (frameFeaturesDetectionStarted) {
+                imshow("frameScoreImg1", frameScoreImg1);
+                waitKey(0);
+            }
+
+            tessApi.SetImage((const unsigned char *) frameScoreImg1.data,
+                             frameScoreImg1.cols,
+                             frameScoreImg1.rows,
+                             frameScoreImg1.channels(),
+                             frameScoreImg1.step);
+            string frameScoreText1 = tessApi.GetUTF8Text();
+            boost::trim(frameScoreText1);
+
+            //局比分2
+            Mat frameScoreImg2 = scorebar(
+                    Rect(frameNum2Pos[0], charRegionMargin, frameNum2Pos[1] - frameNum2Pos[0] + 1,
+                         charRegionHeight));
+            //自适应阈值二值化
+            cvtColor(frameScoreImg2, frameScoreImg2, CV_BGR2GRAY, 1);
+            threshold(frameScoreImg2, frameScoreImg2, 0, 255, THRESH_BINARY | THRESH_OTSU);
+            if (frameFeaturesDetectionStarted) {
+                imshow("frameScoreImg2", frameScoreImg2);
+                waitKey(0);
+            }
+
+            tessApi.SetImage((const unsigned char *) frameScoreImg2.data, frameScoreImg2.cols, frameScoreImg2.rows,
+                             frameScoreImg2.channels(), frameScoreImg2.step);
+            string frameScoreText2 = tessApi.GetUTF8Text();
+            boost::trim(frameScoreText2);
+
+            //最大局数
+            Mat maxFramesImg = scorebar(Rect(maxFrameNumPos[0], charRegionMargin, maxFrameNumPos[1] - maxFrameNumPos[0]
+                                                     + 1,
+                                             charRegionHeight));
+            //自适应阈值二值化
+            cvtColor(maxFramesImg, maxFramesImg, CV_BGR2GRAY, 1);
+            threshold(maxFramesImg, maxFramesImg, 0, 255, THRESH_BINARY | THRESH_OTSU);
+
+
+            if (frameFeaturesDetectionStarted) {
+                imshow("maxFramesImg", maxFramesImg);
+                waitKey(0);
+            }
+            // 用漫水填充将左右两个括号填充掉
+            // FIXME: 这里先假设文字为白色，事实上这里需要判定背景和文字的颜色，可以统计像素值的个数，个数较多的为背景色
+            uchar charColor = 255;
+            int colorFlag = 0;
+            if (videoInfo.bestFramesCharColor == -1) {  // 字符颜色未知，判定字符颜色，取字符图片周围一圈像素进行统计
+                uchar *firstRow = maxFramesImg.ptr<uchar>(0);
+                uchar *lastRow = maxFramesImg.ptr<uchar>(charRegionHeight - 1);
+                for (int i = 0; i < charRegionHeight; ++i) {
+                    uchar *aRow = maxFramesImg.ptr<uchar>(i);
+                    for (int j = 0; j < maxFramesImg.cols; ++j) {
+                        if (aRow[j] == 255)
+                            ++colorFlag;
+                        else
+                            --colorFlag;
+                    }
+                }
+                if (colorFlag >= 0) //白色较多，说明黑色为字符色
+                    charColor = 0;
+                videoInfo.bestFramesCharColor = charColor;
+            }
+            else {
+                charColor = (uchar) videoInfo.bestFramesCharColor;
+            }
+
+            //开始填充括号
+            int mid = charRegionHeight / 2;
+            uchar *midRow = maxFramesImg.ptr<uchar>(mid);
+            for (int i = 0; i < maxFramesImg.cols; ++i) {
+                if (midRow[i] == charColor) {
+                    floodFill(maxFramesImg, Point(i, mid), 0);
+                    break;
+                }
+            }
+            for (int i = maxFramesImg.cols; i >= 0; --i) {
+                if (midRow[i] == charColor) {
+                    floodFill(maxFramesImg, Point(i, mid), 0);
+                    break;
+                }
+            }
+            if (frameFeaturesDetectionStarted) {
+                imshow("maxFramesImg", maxFramesImg);
+                waitKey(0);
+            }
+
+            tessApi.SetImage((const unsigned char *) maxFramesImg.data, maxFramesImg.cols, maxFramesImg.rows,
+                             maxFramesImg.channels(), maxFramesImg.step);
+
+            string maxFramesText = tessApi.GetUTF8Text();
+            boost::trim(maxFramesText);
+
+//            if (nameText1.empty() || nameText2.empty() || scoreText1.empty() || scoreText2.empty()
+//                /*|| frameScoreText1.empty() || frameScoreText2.empty() || maxFramesText.empty()*/) {
+//                return;
+//            }
+
+            //将OCR的结果写入frameFeature中
+            frameFeature.name1 = nameText1;
+            frameFeature.name2 = nameText2;
+            if (!scoreText1.empty()) {
+                frameFeature.score1 = stoi(scoreText1);
+            }
+            if (!scoreText2.empty()) {
+                frameFeature.score2 = stoi(scoreText2);
+            }
+            if (!frameScoreText1.empty()) {
+                frameFeature.frameScore1 = stoi(frameScoreText1);
+            }
+            if (!frameScoreText2.empty()) {
+                frameFeature.frameScore2 = stoi(frameScoreText2);
+            }
+            if (!maxFramesText.empty()) {
+                frameFeature.bestFrames = stoi(maxFramesText);
+            }
+            //测试识别结果
+            if (frameFeaturesDetectionStarted) {
+//                cout << "Frame " << currentFrameNum << ": ";
+//                cout << frameFeature.name1 << (frameFeature.turn == 0 ? " *, " : ", ")
+//                        << frameFeature.score1 << ", "
+//                        << frameFeature.score2 << (frameFeature.turn == 1 ? ", * " : ", ")
+//                        << frameFeature.name2 << ", "
+//                        << frameFeature.frameScore1 << ", "
+//                        << frameFeature.frameScore2 << ", "
+//                        << frameFeature.bestFrames << endl;
+
+                printf("Frame %6d: %20s%3s%4d  %-4d%3s%-20s%4d%4d%4d\n",
+                       currentFrameNum,
+                       frameFeature.name1.c_str(),
+                       (frameFeature.turn == 0 ? " * " : ""),
+                       frameFeature.score1,
+                       frameFeature.score2,
+                       (frameFeature.turn == 1 ? " * " : ""),
+                       frameFeature.name2.c_str(),
+                       frameFeature.frameScore1,
+                       frameFeature.frameScore2,
+                       frameFeature.bestFrames);
+
+            }
         }
-        //OCR之后写入frameFeature中
+
     } //if (isFullTableView)
 }
 
 void SnookerVideoEventDetector::GetScorebarRegion() {
+    cout << "Getting score bar region..." << endl;
     FrameFeature frameFeature;
     //获取一定数量的候选比分条区域, 再从中确定最终的比分条区域
     const int candicateScorebarRegionNum = 50;
@@ -1249,6 +1604,7 @@ void SnookerVideoEventDetector::GetGrayScorebarFromFrameId(int const frameId, Ma
 }
 
 bool SnookerVideoEventDetector::GetCurrentPlayerFlagPos() {
+    cout << "Getting turn indicator position..." << endl;
     int fps = static_cast<int>(videoInfo.fps);
     for (unsigned int currentFrameNum = 100;
          currentFrameNum < videoInfo.framesNum;
@@ -1269,8 +1625,8 @@ bool SnookerVideoEventDetector::GetCurrentPlayerFlagPos() {
                     Mat scorebarDiff = currentScorebar - lastScorebar;
 
                     //测试
-                    imshow("Scorebar diff", scorebarDiff);
-                    waitKey(0);
+                    //imshow("Scorebar diff", scorebarDiff);
+                    //waitKey(0);
 
                     if (DetectTurnIndicator(scorebarDiff)) {
                         return true;
@@ -1287,12 +1643,49 @@ bool SnookerVideoEventDetector::GetCurrentPlayerFlagPos() {
 }
 
 void SnookerVideoEventDetector::GetVideoFramesFeature() {
+    cout << "Processing all video frames..." << endl;
     int fps = static_cast<int>(videoInfo.fps);
     for (unsigned int currentFrameNum = 0; currentFrameNum < videoInfo.framesNum; currentFrameNum += fps/*每隔一秒取一个样本帧*/) {
         //只对不属于回放镜头的帧进行处理
         if (videoInfo.replayCheckHashTab.find(currentFrameNum) == videoInfo.replayCheckHashTab.end()) {
             FrameFeature frameFeature;
             GetFrameFeature(currentFrameNum, frameFeature);
+            if (frameFeature.hasScoreBar) {
+                videoInfo.frameFeatures.push_back(frameFeature);
+            }
+            // 取一定样本后识别准确的球员名字
+            if (videoInfo.frameFeatures.size() == 10) {
+                // 取球员1名字中出现次数最多的单词
+                unordered_map<string, int> map;
+                for (int i = 0; i < 10; ++i) {
+                    map[videoInfo.frameFeatures[i].name1]++;
+                }
+                string name1;
+                int cnt = 0;
+                for (unordered_map<string, int>::const_iterator it = map.cbegin(); it != map.cend(); ++it) {
+                    if ((*it).second > cnt) {
+                        cnt = (*it).second;
+                        name1 = (*it).first;
+                    }
+                }
+
+                // 取球员2名字中出现次数最多的单词
+                map.clear();
+                for (int i = 0; i < 10; ++i) {
+                    map[videoInfo.frameFeatures[i].name2]++;
+                }
+                string name2;
+                cnt = 0;
+                for (unordered_map<string, int>::const_iterator it = map.cbegin(); it != map.cend(); ++it) {
+                    if ((*it).second > cnt) {
+                        cnt = (*it).second;
+                        name2 = (*it).first;
+                    }
+                }
+
+                // 与球员库中的名字进行匹配，找出最相似的
+                GetCorrectNames(name1, name2);
+            }
         }//if (videoInfo.replayCheckHashTab.find(currentFrameNum)==videoInfo.replayCheckHashTab.end())
 
     }//for每一个样本帧
@@ -1312,7 +1705,7 @@ void SnookerVideoEventDetector::DrawDetectedLinesP(Mat &image, const vector<Vec4
 
 //将直线集中的直线画到图像中，便于观察
 void SnookerVideoEventDetector::DrawDetectedLines(Mat &image, const vector<Vec2f> &lines,
-        const Scalar &color, const int width) {
+                                                  const Scalar &color, const int width) {
     vector<Vec2f>::const_iterator lineIt = lines.begin();
     while (lineIt != lines.end()) {
         float rho = (*lineIt)[0];
@@ -1336,7 +1729,7 @@ void SnookerVideoEventDetector::DrawDetectedLines(Mat &image, const vector<Vec2f
 
 //计算两条直线的交点，将交点加入到点集points中
 void SnookerVideoEventDetector::IntersectionPoint(const Vec2f line1, const Vec2f line2,
-        vector<Point> &points, int imgRows, int imgCols) {
+                                                  vector<Point> &points, int imgRows, int imgCols) {
     double a11 = cos(line1[1]), a12 = sin(line1[1]), b1 = line1[0];
     double a21 = cos(line2[1]), a22 = sin(line2[1]), b2 = line2[0];
     double d = a11 * a22 - a12 * a21;
@@ -1367,7 +1760,7 @@ void SnookerVideoEventDetector::DrawCircles(Mat &image, const vector<Point> &poi
 
 //在交点集合中选取离左右两边缘最近的一个点，之后以此点为基准截取比分条区域
 void SnookerVideoEventDetector::SelectPoint(const vector<Point> &points, Size imageSize,
-        Point &selectedPoint, bool &leftSide) {
+                                            Point &selectedPoint, bool &leftSide) {
     int dist = 99999;
     Point myPoint;
     vector<Point>::const_iterator ptIt = points.begin();
@@ -1487,7 +1880,7 @@ bool SnookerVideoEventDetector::IsFullTableView(const vector<Vec2f> &lines, cons
             }
         } else if (lines[i][1] > CV_PI / 180 * 155 &&
                 lines[i][1] < CV_PI / 180 * 175) { //右边的斜线
-            cout << lines[i][0] << endl;
+            //cout << lines[i][0] << endl;
             if (lines[i][0] > imageSize.width * rightLow &&
                     lines[i][0] < imageSize.width * rightHigh) {
                 right = true;
@@ -1562,9 +1955,9 @@ int ShowHistogram(const char *imagePath) {
     int channels[] = {0, 1};
 
     calcHist(&hsv, 1, channels, Mat(), // do not use mask
-            hist, 2, histSize, ranges,
-            true, // the histogram is uniform
-            false);
+             hist, 2, histSize, ranges,
+             true, // the histogram is uniform
+             false);
     double maxVal = 0;
     minMaxLoc(hist, 0, &maxVal, 0, 0);
 
@@ -1576,8 +1969,8 @@ int ShowHistogram(const char *imagePath) {
             float binVal = hist.at<float>(h, s);
             int intensity = cvRound(binVal * 255 / maxVal);
             rectangle(histImg, Point(h * scale, s * scale),
-                    Point((h + 1) * scale - 1, (s + 1) * scale - 1),
-                    Scalar::all(intensity), CV_FILLED);
+                      Point((h + 1) * scale - 1, (s + 1) * scale - 1),
+                      Scalar::all(intensity), CV_FILLED);
         }
 
     namedWindow("Source", 1);
@@ -1669,4 +2062,94 @@ bool SnookerVideoEventDetector::DetectTurnIndicator(cv::Mat &scorebarDiff) {
     else {
         return false;
     }
+}
+
+void SnookerVideoEventDetector::GetCorrectNames(const std::string &name1, const std::string &name2) {
+    // 读取扩展球员名列表文件（字母均为大写）
+    vector<string> nameList;
+    ifstream file(extendedPlayerListPath);
+    string line;
+    while (getline(file, line)) {
+        if (!line.empty()) {
+            nameList.push_back(line);
+        }
+    }
+
+    // 将 name1 和 name2 转为大写形式
+    string upperName1 = name1, upperName2 = name2;
+    upperName1 = boost::to_upper_copy(name1);
+    upperName2 = boost::to_upper_copy(name2);
+
+    // 球员1
+    int distance = 9999;
+    string name;
+    vector<string>::const_iterator it = nameList.cbegin();
+    for (; it != nameList.cend(); ++it) {
+        int dist = EditDistance(name1, *it);
+        if (dist == 0) {
+            name = *it;
+            break;
+        }
+        if (dist < distance) {
+            distance = dist;
+            name = *it;
+        }
+
+    }
+    videoInfo.playerName1 = name;
+
+    // 球员2
+    name = "";
+    distance = 9999;
+    it = nameList.cbegin();
+    for (; it != nameList.cend(); ++it) {
+        int dist = EditDistance(name2, *it);
+        if (dist == 0) {
+            name = *it;
+            break;
+        }
+        if (dist < distance) {
+            distance = dist;
+            name = *it;
+        }
+
+    }
+    videoInfo.playerName2 = name;
+
+}
+
+int SnookerVideoEventDetector::EditDistance(const std::string &str1, const std::string &str2) {
+    int len1 = str1.size();
+    int len2 = str2.size();
+    int **table = new int *[len1 + 1];
+    for (int i = 0; i < len1 + 1; ++i) {
+        table[i] = new int[len2 + 1];
+    }
+
+    for (int i = 0; i < len1 + 1; ++i) {
+        table[i][0] = i;
+    }
+    for (int i = 0; i < len2 + 1; ++i) {
+        table[0][i] = i;
+    }
+
+    for (int i = 1; i < len1 + 1; ++i) {
+        for (int j = 1; j < len2 + 1; ++j) {
+            int d = str1[i - 1] == str2[j - 1] ? 0 : 1;
+            int temp = min(table[i - 1][j] + 1, table[i][j - 1] + 1);
+            table[i][j] = min(temp, table[i - 1][j - 1] + d);
+        }
+    }
+
+    int distance = table[len1][len2];
+
+    // 释放申请的空间
+    for (int i = 0; i < len1 + 1; ++i) {
+        delete[]table[i];
+        table[i] = NULL;
+    }
+    delete[]table;
+    table = NULL;
+
+    return distance;
 }

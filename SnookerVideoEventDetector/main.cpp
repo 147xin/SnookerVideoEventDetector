@@ -11,7 +11,7 @@
 int main(int argc, const char *argv[]) {
     SnookerVideoEventDetector detector;
     detector.SetVideoFilePath("/Users/hix/Desktop/SnookerVideoEventDetection/"
-            "SnookerVideos/Murphy147/");
+                                      "SnookerVideos/Murphy147/");
 
     //detector.GetVideoFrames("/Users/hix/Desktop/SnookerVideoEventDetection/"
     //                        "TestReplayDetection/Frames1/");
@@ -23,16 +23,22 @@ int main(int argc, const char *argv[]) {
     detector.videoInfo.height = 622;
 
     detector.SetReplayDetectorOutputPath("/Users/hix/Desktop/"
-            "SnookerVideoEventDetection/"
-            "TestReplayDetection/Output/");
+                                                 "SnookerVideoEventDetection/"
+                                                 "TestReplayDetection/Output/");
+    // 设置扩展球员名列表文件路径
+    detector.SetExtendedPlayerListPath("/Users/hix/PycharmProjects/SnookerPlayerNameListExtractor"
+                                               "/extended_player_list.txt");
     //detector.GetReplayInfo(); //节省调试时间, 暂时注释掉
     //读取回放信息
     detector.ReadReplayInfo();
+
     //获取比分条位置
     detector.GetScorebarRegion();
     //获取当前击球球员指示符位置
     detector.GetCurrentPlayerFlagPos();
     //获取每一样本帧的特征
+    extern bool frameFeaturesDetectionStarted;
+    frameFeaturesDetectionStarted = true;
     detector.GetVideoFramesFeature();
 
     return 0;

@@ -17,6 +17,9 @@
     <content url="file:///usr/local/lib/libopencv_imgproc.dylib">
       <sourceFolder url="file:///usr/local/lib/libopencv_imgproc.dylib" isTestSource="false" />
     </content>
+    <content url="file:///usr/local/lib/libtesseract.3.dylib">
+      <sourceFolder url="file:///usr/local/lib/libtesseract.3.dylib" isTestSource="false" />
+    </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>

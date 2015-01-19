@@ -14,15 +14,20 @@
 #include <iostream>
 #include <fstream>
 #include <unordered_set>
+#include <unordered_map>
 #include <algorithm>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <ctime>
 #include <cmath>
-#include <boost/algorithm/string.hpp>  //使用了trim_copy函数
+#include <cstring>
+#include <boost/algorithm/string.hpp>  // 使用了trim_copy函数
+#include <tesseract/baseapi.h>  // Google Tesseract OCR Engine
 #include "ShotCut.h"
 #include "ReplayDetector.h"
+
+extern bool frameFeaturesDetectionStarted;
 
 struct FrameFeature {
     int frameId = -1; //帧编号，初始值为-1
@@ -42,8 +47,10 @@ struct FrameFeature {
     int name2PosPlanB[2] = {-1, -1};
     //比分条文本特征
     int turn = -1;                     //击球方 0/1，-1表示不确定
+    std::string name1, name2;          //球员名字，获取候选球员名
     int score1 = -1, score2 = -1;           //当局比分
-    int frameScore1 = -1, frameScore2 = -1; //总比分
+    int frameScore1 = -1, frameScore2 = -1; //大比分（局比分）
+    int bestFrames;                        //总局数
 };
 
 enum AudioType {
@@ -65,7 +72,8 @@ struct SnookerVideoInfo {
     int framesNum;                  //总帧数
     int width, height;                       //视频尺寸
     std::string playerName1, playerName2;    //球员名字
-    int bestFrames;                          //总局数
+    int bestFrames;                          //最大局数
+    int bestFramesCharColor = -1;           //最大局数二值化后的字符（前景）颜色，0是黑色，255是白色，-1表示未确定
     cv::Rect scorebarRegion;                 //比分条在原帧中的位置
     int currentPlayerFlagPos[2][2];          //当前击球球员指示符在比分条中的位置
     std::vector<FrameFeature> frameFeatures; //取样帧的特征
@@ -77,11 +85,17 @@ struct SnookerVideoInfo {
 
 class SnookerVideoEventDetector {
 public:
-    SnookerVideoEventDetector(); //构造函数
+
     SnookerVideoInfo videoInfo;
     std::vector<cv::Rect> candidateScorebarRegions;
     cv::Mat lastScorebar, currentScorebar;
+    std::string extendedPlayerListPath;
 
+    void SetExtendedPlayerListPath(const std::string &path) {
+        extendedPlayerListPath = path;
+    }
+
+    SnookerVideoEventDetector(); //构造函数
     void SetVideoFilePath(const std::string &videoPath);
 
     void GetVideoFrames(const std::string &framesPath);
@@ -100,19 +114,20 @@ public:
 
     void GetVideoFramesFeature();
 
+
 private:
     void DrawDetectedLines(cv::Mat &image, const std::vector<cv::Vec2f> &lines,
-            const cv::Scalar &color, const int width = 1);
+                           const cv::Scalar &color, const int width = 1);
 
     void DrawDetectedLinesP(cv::Mat &image, const std::vector<cv::Vec4i> &lines, cv::Scalar &color);
 
     void DrawCircles(cv::Mat &image, const std::vector<cv::Point> &points, const cv::Scalar &color);
 
     void IntersectionPoint(const cv::Vec2f line1, const cv::Vec2f line2,
-            std::vector<cv::Point> &points, int imgRows, int imgCols);
+                           std::vector<cv::Point> &points, int imgRows, int imgCols);
 
     void SelectPoint(const std::vector<cv::Point> &points, cv::Size imageSize,
-            cv::Point &selectedPoint, bool &leftSide);
+                     cv::Point &selectedPoint, bool &leftSide);
 
     int TableRegionHeight(const std::vector<cv::Point> &points, const int imageHeight);
 
@@ -127,6 +142,10 @@ private:
     void GetGrayScorebarFromFrameId(int const frameId, cv::Mat &scorebar);
 
     bool DetectTurnIndicator(cv::Mat &scorebarDiff);
+
+    void GetCorrectNames(const std::string &name1, const std::string &name2);
+
+    int EditDistance(const std::string &str1, const std::string &str2);
 };
 
 #endif
