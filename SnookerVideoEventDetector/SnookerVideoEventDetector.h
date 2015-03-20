@@ -35,6 +35,7 @@ struct FrameFeature {
     bool isFullTable = false;     //是否是全台面
     bool hasScoreBar = false;     //是否包含比分条
     cv::Rect scorebarRegion;   //比分条在原帧中的位置, 这个字段用于获取候选的比分条区域
+
     //各字段在比分条中的位置
     int maxFrameNumPos[2] = {-1, -1};
     int frameNum1Pos[2] = {-1, -1};
@@ -45,6 +46,7 @@ struct FrameFeature {
     int name2Pos[2] = {-1, -1};
     int name1PosPlanB[2] = {-1, -1};
     int name2PosPlanB[2] = {-1, -1};
+
     //比分条文本特征
     int turn = -1;                     //击球方 0/1，-1表示不确定
     std::string name1, name2;          //球员名字，获取候选球员名
@@ -54,7 +56,7 @@ struct FrameFeature {
 };
 
 enum AudioType {
-    laughter, applause
+    LAUGHTER, APPLAUSE, SHOT, SILENCE
 };
 
 struct AudioEvent {
@@ -63,23 +65,59 @@ struct AudioEvent {
     AudioType audioType;
 };
 
+// 一局比赛的起始及终局标志
+struct Frame {
+    int start = -1;
+    int end = -1;
+    int num = -1;
+    int score1, score2; //该局结束时的该局比分
+    int frameScore1, frameScore2; // 该局结束时的局比分
+    int gamePoint = -1;  // 是否某一方的赛点，0表示球员1的赛点，1表示球员2的赛点，2表示双赛点
+    bool isFinal = false;
+};
+
+// 高分
+struct HighScore {
+    int start = -1;
+    int end = -1;
+    int score = -1;
+};
+
+// 防守大战
+struct Defence {
+    int start = -1;
+    int end = -1;
+};
+
+// 犯规
+struct Foul {
+    int start = -1;
+    int end = -1;
+    int player = -1;  // 指示谁犯规了，0/1
+};
 struct SnookerVideoInfo {
     std::string videoFilePath;               //视频文件路径
     std::string framesFolder;                //存放视频帧的文件夹
     std::string cutPath, gtPath, replayPath, replayFeatPath, allCutPath, cutUpdatePath,
-            gtUpdatePath;                        //回放检测器需要用到的一些路径
+            gtUpdatePath;                    //回放检测器需要用到的一些路径
     double fps;                              //帧率
-    int framesNum;                  //总帧数
+    int framesNum;                           //总帧数
     int width, height;                       //视频尺寸
     std::string playerName1, playerName2;    //球员名字
     int bestFrames;                          //最大局数
-    int bestFramesCharColor = -1;           //最大局数二值化后的字符（前景）颜色，0是黑色，255是白色，-1表示未确定
+    int bestFramesCharColor = -1;            //最大局数二值化后的字符（前景）颜色，0是黑色，255是白色，-1表示未确定
     cv::Rect scorebarRegion;                 //比分条在原帧中的位置
     int currentPlayerFlagPos[2][2];          //当前击球球员指示符在比分条中的位置
     std::vector<FrameFeature> frameFeatures; //取样帧的特征
     std::vector<ReplayInfo> replays;         //回放镜头
     std::unordered_set<int> replayCheckHashTab;
     std::vector<AudioEvent> audioEvents;     //音频事件
+
+    // 根据比分序列检测到的事件
+    std::vector<Frame> frames;         // 各局比赛信息
+    std::vector<HighScore> highScores; // 高分
+    std::vector<Defence> defences;     // 防守
+    std::vector<Foul> fouls;           // 犯规
 };
 
 
@@ -114,6 +152,17 @@ public:
 
     void GetVideoFramesFeature();
 
+    // 对比分序列进行处理，去除无效记录与重复记录
+    void RefineScoreSequence();
+
+    // 根据比分序列进行事件判定
+    void EventDetection();
+
+    // 以上函数包含下列几个事件的检测
+    void FrameDetection();  // 对局检测
+    void HighScoreDetection();  // 高分检测
+    void FoulDetection(); // 犯规检测
+    void DefenceDetection(); // 防守检测
 
 private:
     void DrawDetectedLines(cv::Mat &image, const std::vector<cv::Vec2f> &lines,
@@ -146,6 +195,8 @@ private:
     void GetCorrectNames(const std::string &name1, const std::string &name2);
 
     int EditDistance(const std::string &str1, const std::string &str2);
+
+
 };
 
 #endif

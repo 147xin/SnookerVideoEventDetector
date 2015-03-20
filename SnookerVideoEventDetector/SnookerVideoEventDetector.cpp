@@ -1302,45 +1302,53 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
             int charRegionMargin = (int) round(videoInfo.scorebarRegion.height * 0.1);
             int charRegionHeight = videoInfo.scorebarRegion.height - charRegionMargin * 2;
 
-            //球员名字1
-            Mat nameImg1 = scorebar(Rect(name1Pos[0],
-                                         charRegionMargin,
-                                         name1Pos[1] - name1Pos[0] + 1,
-                                         charRegionHeight));
-            //自适应阈值二值化
-            cvtColor(nameImg1, nameImg1, CV_BGR2GRAY, 1);
-            threshold(nameImg1, nameImg1, 0, 255, THRESH_BINARY | THRESH_OTSU);
-            if (frameFeaturesDetectionStarted) {
-                imshow("nameImg1", nameImg1);
-                waitKey(0);
+            string nameText1, nameText2;
+            // 如果已经通过前10个样本确定了球员的名字，则直接使用，否则开始OCR
+            if (!videoInfo.playerName1.empty() && !videoInfo.playerName2.empty()) {
+                frameFeature.name1 = videoInfo.playerName1;
+                frameFeature.name2 = videoInfo.playerName2;
             }
-            tessApi.SetImage((const unsigned char *) nameImg1.data,
-                             nameImg1.cols,
-                             nameImg1.rows,
-                             nameImg1.channels(),
-                             nameImg1.step);
-            string nameText1 = tessApi.GetUTF8Text();
-            boost::trim(nameText1);
+            else {
+                //球员名字1
+                Mat nameImg1 = scorebar(Rect(name1Pos[0],
+                                             charRegionMargin,
+                                             name1Pos[1] - name1Pos[0] + 1,
+                                             charRegionHeight));
+                //自适应阈值二值化
+                cvtColor(nameImg1, nameImg1, CV_BGR2GRAY, 1);
+                threshold(nameImg1, nameImg1, 0, 255, THRESH_BINARY | THRESH_OTSU);
+                if (frameFeaturesDetectionStarted) {
+                    imshow("nameImg1", nameImg1);
+                    waitKey(0);
+                }
+                tessApi.SetImage((const unsigned char *) nameImg1.data,
+                                 nameImg1.cols,
+                                 nameImg1.rows,
+                                 nameImg1.channels(),
+                                 nameImg1.step);
+                nameText1 = tessApi.GetUTF8Text();
+                boost::trim(nameText1);
 
-            //球员名字2
-            Mat nameImg2 = scorebar(Rect(name2Pos[0],
-                                         charRegionMargin,
-                                         name2Pos[1] - name2Pos[0] + 1,
-                                         charRegionHeight));
-            //自适应阈值二值化
-            cvtColor(nameImg2, nameImg2, CV_BGR2GRAY, 1);
-            threshold(nameImg2, nameImg2, 0, 255, THRESH_BINARY | THRESH_OTSU);
-            if (frameFeaturesDetectionStarted) {
-                imshow("nameImg2", nameImg2);
-                waitKey(0);
+                //球员名字2
+                Mat nameImg2 = scorebar(Rect(name2Pos[0],
+                                             charRegionMargin,
+                                             name2Pos[1] - name2Pos[0] + 1,
+                                             charRegionHeight));
+                //自适应阈值二值化
+                cvtColor(nameImg2, nameImg2, CV_BGR2GRAY, 1);
+                threshold(nameImg2, nameImg2, 0, 255, THRESH_BINARY | THRESH_OTSU);
+                if (frameFeaturesDetectionStarted) {
+                    imshow("nameImg2", nameImg2);
+                    waitKey(0);
+                }
+                tessApi.SetImage((const unsigned char *) nameImg2.data,
+                                 nameImg2.cols,
+                                 nameImg2.rows,
+                                 nameImg2.channels(),
+                                 nameImg2.step);
+                nameText2 = tessApi.GetUTF8Text();
+                boost::trim(nameText2);
             }
-            tessApi.SetImage((const unsigned char *) nameImg2.data,
-                             nameImg2.cols,
-                             nameImg2.rows,
-                             nameImg2.channels(),
-                             nameImg2.step);
-            string nameText2 = tessApi.GetUTF8Text();
-            boost::trim(nameText2);
 
             //下面仅识别数字
             tessApi.SetVariable("tessedit_char_whitelist", "0123456789");
@@ -1443,7 +1451,6 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
                 waitKey(0);
             }
             // 用漫水填充将左右两个括号填充掉
-            // FIXME: 这里先假设文字为白色，事实上这里需要判定背景和文字的颜色，可以统计像素值的个数，个数较多的为背景色
             uchar charColor = 255;
             int colorFlag = 0;
             if (videoInfo.bestFramesCharColor == -1) {  // 字符颜色未知，判定字符颜色，取字符图片周围一圈像素进行统计
@@ -1498,8 +1505,10 @@ void SnookerVideoEventDetector::GetFrameFeature(int const currentFrameNum, Frame
 //            }
 
             //将OCR的结果写入frameFeature中
-            frameFeature.name1 = nameText1;
-            frameFeature.name2 = nameText2;
+            if (frameFeature.name1.empty() && frameFeature.name2.empty()) {
+                frameFeature.name1 = nameText1;
+                frameFeature.name2 = nameText2;
+            }
             if (!scoreText1.empty()) {
                 frameFeature.score1 = stoi(scoreText1);
             }
@@ -2153,3 +2162,330 @@ int SnookerVideoEventDetector::EditDistance(const std::string &str1, const std::
 
     return distance;
 }
+
+void SnookerVideoEventDetector::RefineScoreSequence() {
+    vector<FrameFeature> refined;  // 用来存放去重之后的新的比分序列
+    FrameFeature prevRecord;  // 前一条记录
+    vector<FrameFeature>::const_iterator it = videoInfo.frameFeatures.cbegin();
+    for (; it != videoInfo.frameFeatures.cend(); ++it) {
+        if (it->turn == -1 || it->score1 == -1 || it->score2 == -1 || it->frameScore1 == -1 || it->frameScore2 == -1) {
+            continue;
+        }
+        // 如果新的比分序列为空，则将当前记录插入其中
+        if (refined.size() == 0) {
+            refined.push_back(*it);
+            prevRecord = *it;
+        }
+        else {  // 新的比分序列不为空
+            //将当前记录与前一条记录进行对比，如果相同则跳过当前记录
+            if (prevRecord.score1 == it->score1 && prevRecord.score2 == it->score2 && prevRecord.turn == it->turn) {
+                continue;
+            }
+                // 若不相同，但是比分变化不合法
+            else if ((it->frameScore1 - prevRecord.frameScore1 > 1 || it->frameScore2 - prevRecord.frameScore2 > 1
+                    || (it->frameScore1 - prevRecord.frameScore1 == 1 && it->frameScore2 - prevRecord.frameScore2 == 1))
+                    /*局分增幅过大*/
+                    || it->frameScore1 < prevRecord.frameScore1 || it->frameScore2 < prevRecord.frameScore2
+                    /*局分减小*/
+                    || it->score1 - prevRecord.score1 > 8 || it->score2 - prevRecord.score2 > 8
+                    /*比分增幅过大*/
+                    /*这里本来应该是7，但是考虑到中间漏掉一条记录的情况，所以宽容度放宽了一点*/
+                    || ((it->score1 < prevRecord.score1 || it->score2 < prevRecord.score2)
+                    && it->frameScore1 == prevRecord.frameScore1 && it->frameScore2 == prevRecord.frameScore2)
+                    /*比分减小（在同一局中）*/
+                    || (it->turn == prevRecord.turn && it->turn == 0 && it->score2 > prevRecord.score2)
+                    || (it->turn == prevRecord.turn && it->turn == 1 && it->score1 > prevRecord.score1)
+                /*击球权未变化而对方比分增加*/) {
+                continue;
+            }
+            else {
+                refined.push_back(*it);
+                prevRecord = *it;
+            }
+
+        }
+    }
+    videoInfo.frameFeatures = refined;
+}
+
+
+void SnookerVideoEventDetector::EventDetection() {
+
+
+}
+
+void SnookerVideoEventDetector::FrameDetection() {
+    if (videoInfo.frameFeatures.size() < 2)
+        return;
+    int prevScore1 = -1, prevScore2 = -1, prevFrameId = -1, prevFrameScore1 = -1, prevFrameScore2 = -1;
+    int start = -1;
+    vector<FrameFeature>::const_iterator it = videoInfo.frameFeatures.cbegin();
+    for (; it != videoInfo.frameFeatures.cend(); ++it) {
+        if (-1 == prevFrameScore1) {    // 第一条记录
+            prevFrameId = it->frameId;
+            prevScore1 = it->score1;
+            prevScore2 = it->score2;
+            prevFrameScore1 = it->frameScore1;
+            prevFrameScore2 = it->frameScore2;
+            start = it->frameId;
+        }
+        else {    // 不是第一条记录
+            if (it->frameScore1 == prevFrameScore1 && it->frameScore2 == prevFrameScore2) {   // 同前一条记录相同，跳过
+                prevFrameId = it->frameId;
+                prevFrameId = it->frameId;
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                prevFrameScore1 = it->frameScore1;
+                prevFrameScore2 = it->frameScore2;
+                continue;
+            }
+            else {    // 与前一条记录不同
+                Frame frame;
+                frame.start = start;
+                frame.end = prevFrameId;
+                frame.score1 = prevScore1;
+                frame.score2 = prevScore2;
+                frame.frameScore1 = it->frameScore1;
+                frame.frameScore2 = it->frameScore2;
+                // 第几局
+                frame.num = prevFrameScore1 + prevFrameScore2 + 1;
+                // 是否是谁的赛点
+                if ((it - 1)->frameScore1 == videoInfo.bestFrames / 2 && (it - 1)->frameScore2 != videoInfo.bestFrames / 2) {
+                    frame.gamePoint = 0;
+                }
+                if ((it - 1)->frameScore1 != videoInfo.bestFrames / 2 && (it - 1)->frameScore2 == videoInfo.bestFrames / 2) {
+                    frame.gamePoint = 1;
+                }
+                if ((it - 1)->frameScore1 == videoInfo.bestFrames / 2 && (it - 1)->frameScore2 == videoInfo.bestFrames / 2) {
+                    frame.gamePoint = 2;
+                }
+                // 是否是决胜局
+                if (prevFrameScore1 + prevFrameScore2 + 1 == videoInfo.bestFrames) {
+                    frame.isFinal = true;
+                }
+                videoInfo.frames.push_back(frame);
+
+                prevFrameId = it->frameId;
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                prevFrameScore1 = it->frameScore1;
+                prevFrameScore2 = it->frameScore2;
+                start = it->frameId;
+            }
+        }
+
+    }
+    if ((--it)->frameId - start > 60 * videoInfo.fps) {// 如果剩下的视频时间大于1分钟，则算作一局
+        Frame frame;
+        frame.start = start;
+        frame.end = it->frameId;
+        frame.score1 = it->score1;
+        frame.score2 = it->score2;
+
+        // 根据比分判断这局结束以后的局分
+        frame.frameScore1 = it->frameScore1 + (it->score1 > it->score2 ? 1 : 0);
+        frame.frameScore2 = it->frameScore2 + (it->score2 > it->score1 ? 1 : 0);
+
+        // 第几局
+        frame.num = it->frameScore1 + it->frameScore2 + 1;
+        // 是否是谁的赛点
+        if (it->frameScore1 == videoInfo.bestFrames / 2 && it->frameScore2 != videoInfo.bestFrames / 2) {
+            frame.gamePoint = 0;
+        }
+        if (it->frameScore1 != videoInfo.bestFrames / 2 && it->frameScore2 == videoInfo.bestFrames / 2) {
+            frame.gamePoint = 1;
+        }
+        if (it->frameScore1 == videoInfo.bestFrames / 2 && it->frameScore2 == videoInfo.bestFrames / 2) {
+            frame.gamePoint = 2;
+        }
+        // 是否是决胜局
+        if (it->frameScore1 + it->frameScore2 + 1 == videoInfo.bestFrames) {
+            frame.isFinal = true;
+        }
+        videoInfo.frames.push_back(frame);
+    }
+}
+
+void SnookerVideoEventDetector::FoulDetection() {
+    if (videoInfo.frameFeatures.size() < 2)
+        return;
+    const int backTime = 15; // 从犯规后的计分点往前回退的时间（单位：秒）
+    int prevTurn = -1, prevScore1 = -1, prevScore2 = -1;
+    Foul foul;
+    vector<FrameFeature>::const_iterator it = videoInfo.frameFeatures.cbegin();
+    for (; it != videoInfo.frameFeatures.cend(); ++it) {
+        if (-1 == prevTurn) {
+            prevTurn = it->turn;
+            prevScore1 = it->score1;
+            prevScore2 = it->score2;
+            continue;
+        }
+        else {
+            if (it->turn == prevTurn) {   // 击球权没变
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                continue;
+            }
+            else {     // 交换击球权
+                if (0 == it->turn && it->score1 - prevScore1 >= 4 && it->score1 - prevScore1 <= 7) {
+                    foul.player = 1;
+                    foul.start = it->frameId - static_cast<int>(backTime * videoInfo.fps);
+                    foul.end = it->frameId;
+                    videoInfo.fouls.push_back(foul);
+                    prevTurn = 0;
+                    prevScore1 = it->score1;
+                    prevScore2 = it->score2;
+                }
+                else if (1 == it->turn && it->score2 - prevScore2 >= 4 && it->score2 - prevScore2 <= 7) {
+                    foul.player = 0;
+                    foul.start = it->frameId - static_cast<int>(backTime * videoInfo.fps);
+                    foul.end = it->frameId;
+                    videoInfo.fouls.push_back(foul);
+                    prevTurn = 1;
+                    prevScore1 = it->score1;
+                    prevScore2 = it->score2;
+                }
+                else {
+                    prevTurn = it->turn;
+                    prevScore1 = it->score1;
+                    prevScore2 = it->score2;
+                }
+            }
+        }
+    }
+}
+
+void SnookerVideoEventDetector::DefenceDetection() {
+    if (videoInfo.frameFeatures.size() < 2)
+        return;
+    const int MinDefenceTime = 5;  // 防守时间大于这个时间（单位：分钟）就被记录为防守大战事件
+    int start = -1;
+    int prevScore1 = -1, prevScore2 = -1;
+    int prevFrameScore1 = -1, prevFrameScore2 = -1;
+    int prevTurn = -1;
+    vector<FrameFeature>::const_iterator it = videoInfo.frameFeatures.cbegin();
+    for (; it != videoInfo.frameFeatures.cend(); ++it) {
+        if (it->frameId == 24000)
+            int brk = 1;
+        if (-1 == start) {  // 第一个记录
+            start = it->frameId;
+            prevScore1 = it->score1;
+            prevScore2 = it->score2;
+            prevFrameScore1 = it->frameScore1;
+            prevFrameScore2 = it->frameScore2;
+            prevTurn = it->turn;
+            continue;
+        }
+        else {  // 不是第一个记录
+            // 进入新的一局，重新开始记录
+            if (it->frameScore1 > prevFrameScore1 || it->frameScore2 > prevFrameScore2) {
+                start = it->frameId;
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                prevFrameScore1 = it->frameScore1;
+                prevFrameScore2 = it->frameScore2;
+                prevTurn = it->turn;
+                continue;
+            }
+            // 与上一记录比分相同，交换击球权，防守中
+            if (it->score1 == prevScore1 && it->score2 == prevScore2 && it->turn != prevTurn) {
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                prevFrameScore1 = it->frameScore1;
+                prevFrameScore2 = it->frameScore2;
+                prevTurn = it->turn;
+                continue;
+            }
+            // 与上一记录比分不同，交换击球权
+            if ((it->score1 != prevScore1 || it->score2 != prevScore2) && it->turn != prevTurn) {
+                // 球员1比分增加4-7分，球员2比分不变，击球权转为球员1，说明球员2犯规了，这种情况仍算在防守大战中
+                if (it->score1 - prevScore1 >= 4 && it->score1 - prevScore1 <= 7 && it->score2 == prevScore2 && 0 == it->turn) {
+                    prevScore1 = it->score1;
+                    prevScore2 = it->score2;
+                    prevFrameScore1 = it->frameScore1;
+                    prevFrameScore2 = it->frameScore2;
+                    prevTurn = it->turn;
+                    continue;
+                }
+                // 球员2比分增加4-7分，球员1比分不变，击球权转为球员2，说明球员1犯规了，这种情况仍算在防守大战中
+                if ((it->score2 - prevScore2 >= 4 && it->score2 - prevScore2 <= 7 && it->score1 == prevScore1 && 1 ==
+                        it->turn)) {
+                    prevScore1 = it->score1;
+                    prevScore2 = it->score2;
+                    prevFrameScore1 = it->frameScore1;
+                    prevFrameScore2 = it->frameScore2;
+                    prevTurn = it->turn;
+                    continue;
+                }
+                // 一方得分<=3，另一方得分不变，交换击球权，说明防守大战已结束
+                if ((it->score1 - prevScore1 > 0 && it->score1 - prevScore1 < 4 && it->score2 == prevScore2)
+                        || (it->score2 - prevScore2 > 0 && it->score2 - prevScore2 < 4 && it->score1 == prevScore1)) {
+                    if ((it - 1)->frameId - start > MinDefenceTime * 60 * videoInfo.fps) {
+                        Defence defence;
+                        defence.start = start;
+                        defence.end = (it - 1)->frameId;
+                        videoInfo.defences.push_back(defence);
+                    }
+                    start = it->frameId;
+                    prevScore1 = it->score1;
+                    prevScore2 = it->score2;
+                    prevFrameScore1 = it->frameScore1;
+                    prevFrameScore2 = it->frameScore2;
+                    prevTurn = it->turn;
+                    continue;
+                }
+            }
+            // 与上一记录比分不同，未交换击球权，正常得分，防守结束
+            if ((it->score1 > prevScore1 || it->score2 > prevScore2) && it->turn == prevTurn) {
+                if ((it - 1)->frameId - start > MinDefenceTime * 60 * videoInfo.fps) {
+                    Defence defence;
+                    defence.start = start;
+                    defence.end = (it - 1)->frameId;
+                    videoInfo.defences.push_back(defence);
+                }
+                start = it->frameId;
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                prevFrameScore1 = it->frameScore1;
+                prevFrameScore2 = it->frameScore2;
+                prevTurn = it->turn;
+                continue;
+            }
+        }
+    }
+}
+
+void SnookerVideoEventDetector::HighScoreDetection() {
+    if (videoInfo.frameFeatures.size() < 2)
+        return;
+    vector<FrameFeature>::const_iterator it = videoInfo.frameFeatures.cbegin();
+    for (; it != videoInfo.frameFeatures.cend(); ++it) {
+
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
