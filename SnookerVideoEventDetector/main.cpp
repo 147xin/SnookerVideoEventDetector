@@ -114,8 +114,6 @@ int main(int argc, const char *argv[]) {
 //    ofile.close();
 
     // 根据比分序列进行事件判定
-    detector.FrameDetection();
-    detector.FoulDetection();
-    detector.DefenceDetection();
+    detector.EventDetection();
     return 0;
 }

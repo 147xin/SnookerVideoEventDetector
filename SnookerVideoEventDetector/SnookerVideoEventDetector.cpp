@@ -2210,8 +2210,10 @@ void SnookerVideoEventDetector::RefineScoreSequence() {
 
 
 void SnookerVideoEventDetector::EventDetection() {
-
-
+    FrameDetection();
+    FoulDetection();
+    DefenceDetection();
+    HighScoreDetection();
 }
 
 void SnookerVideoEventDetector::FrameDetection() {
@@ -2365,8 +2367,6 @@ void SnookerVideoEventDetector::DefenceDetection() {
     int prevTurn = -1;
     vector<FrameFeature>::const_iterator it = videoInfo.frameFeatures.cbegin();
     for (; it != videoInfo.frameFeatures.cend(); ++it) {
-        if (it->frameId == 24000)
-            int brk = 1;
         if (-1 == start) {  // 第一个记录
             start = it->frameId;
             prevScore1 = it->score1;
@@ -2458,9 +2458,102 @@ void SnookerVideoEventDetector::DefenceDetection() {
 void SnookerVideoEventDetector::HighScoreDetection() {
     if (videoInfo.frameFeatures.size() < 2)
         return;
+    const int highScoreThreshold = 30;  // 记录高分的阈值，超过这个分数的单杆事件将被记录
+    int start = -1, prevScore1 = -1, prevScore2 = -1, prevFrameScore1 = -1, prevFrameScore2 = -1, prevTurn = -1, score = 0;
     vector<FrameFeature>::const_iterator it = videoInfo.frameFeatures.cbegin();
     for (; it != videoInfo.frameFeatures.cend(); ++it) {
+        if (-1 == prevTurn) {
+            start = it->frameId;
+            prevTurn = it->turn;
+            prevScore1 = it->score1;
+            prevScore2 = it->score2;
+            prevFrameScore1 = it->frameScore1;
+            prevFrameScore2 = it->frameScore2;
+            continue;
+        }
+        else {
+            // 局比分发生变化
+            if (it->frameScore1 > prevFrameScore1 || it->frameScore2 > prevFrameScore2) {
+                // 如果当前单杆分数超过高分阈值，则记录此高分事件
+                if (score >= highScoreThreshold) {
+                    HighScore highScore;
+                    highScore.score = score;
+                    highScore.start = start;
+                    highScore.end = (it - 1)->frameId;
+                    highScore.player = (it - 1)->turn;
+                    videoInfo.highScores.push_back(highScore);
+                }
 
+                start = it->frameId;
+                prevTurn = it->turn;
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                prevFrameScore1 = it->frameScore1;
+                prevFrameScore2 = it->frameScore2;
+                score = 0;
+                continue;
+            }
+                // 局比分未变化，比分增加，击球权未变化
+            else if ((it->score1 > prevScore1 || it->score2 > prevScore2) && it->turn == prevTurn) {
+                if (it->score1 > prevScore1) {
+                    score += it->score1 - prevScore1;
+                }
+                else if (it->score2 - prevScore2) {
+                    score += it->score2 - prevScore2;
+                }
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                continue;
+            }
+                // 局比分未变化，比分未变化，击球权变化
+            else if (it->score1 == prevScore1 && it->score2 == prevScore2 && it->turn != prevTurn) {
+                // 如果当前单杆分数超过高分阈值，则记录此高分事件
+                if (score >= highScoreThreshold) {
+                    HighScore highScore;
+                    highScore.score = score;
+                    highScore.start = start;
+                    highScore.end = (it - 1)->frameId;
+                    highScore.player = (it - 1)->turn;
+                    videoInfo.highScores.push_back(highScore);
+                }
+
+                start = it->frameId;
+                prevTurn = it->turn;
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                score = 0;
+                continue;
+            }
+                // 局比分未变化，比分增加，击球权变化
+            else if ((it->score1 > prevScore1 || it->score2 > prevScore2) && it->turn != prevTurn) {
+                // 如果当前单杆分数超过高分阈值，则记录此高分事件
+                if (score >= highScoreThreshold) {
+                    HighScore highScore;
+                    highScore.score = score;
+                    highScore.start = start;
+                    highScore.end = (it - 1)->frameId;
+                    highScore.player = (it - 1)->turn;
+                    videoInfo.highScores.push_back(highScore);
+                }
+
+                start = it->frameId;
+                prevTurn = it->turn;
+                prevScore1 = it->score1;
+                prevScore2 = it->score2;
+                score = 0;
+                continue;
+            }
+        }
+    }
+
+    // 处理剩下的比分
+    if (score >= highScoreThreshold) {
+        HighScore highScore;
+        highScore.score = score;
+        highScore.start = start;
+        highScore.end = (it - 1)->frameId;
+        highScore.player = (it - 1)->turn;
+        videoInfo.highScores.push_back(highScore);
     }
 }
 

@@ -81,6 +81,7 @@ struct HighScore {
     int start = -1;
     int end = -1;
     int score = -1;
+    int player = -1;   // 打出该高分的球员，0/1
 };
 
 // 防守大战
