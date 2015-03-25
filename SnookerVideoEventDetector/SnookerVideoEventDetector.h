@@ -56,7 +56,11 @@ struct FrameFeature {
 };
 
 enum AudioType {
-    LAUGHTER, APPLAUSE, SHOT, SILENCE
+    APPLAUSE, CHEER, LAUGHTER, NOISE, REPLAY_SHOT, SHOT, SIGH, SILENCE, SPEECH, SPEECH_WITH_APPLAUSE, SPEECH_WITH_CHEER
+};
+
+enum EventType {
+    SCORE, FOUL, MISS, SAFETY, MISS_OR_SAFETY, UNKNOWN, NOEVENT
 };
 
 struct AudioEvent {
@@ -96,6 +100,15 @@ struct Foul {
     int end = -1;
     int player = -1;  // 指示谁犯规了，0/1
 };
+
+// 回放
+struct Replay {
+    int start = -1;
+    int end = -1;
+    int player = -1;
+    int eventType = -1;  // 0进球，1失误，2犯规
+};
+
 struct SnookerVideoInfo {
     std::string videoFilePath;               //视频文件路径
     std::string framesFolder;                //存放视频帧的文件夹
@@ -110,15 +123,19 @@ struct SnookerVideoInfo {
     cv::Rect scorebarRegion;                 //比分条在原帧中的位置
     int currentPlayerFlagPos[2][2];          //当前击球球员指示符在比分条中的位置
     std::vector<FrameFeature> frameFeatures; //取样帧的特征
-    std::vector<ReplayInfo> replays;         //回放镜头
+    std::vector<ReplayInfo> rawReplays;         //回放镜头
+
     std::unordered_set<int> replayCheckHashTab;
-    std::vector<AudioEvent> audioEvents;     //音频事件
+    std::vector<AudioType> audioEvents;     //音频事件
 
     // 根据比分序列检测到的事件
     std::vector<Frame> frames;         // 各局比赛信息
     std::vector<HighScore> highScores; // 高分
     std::vector<Defence> defences;     // 防守
     std::vector<Foul> fouls;           // 犯规
+
+    // 根据比分序列和回放镜头检测到的事件
+    std::vector<Replay> replays;
 };
 
 
@@ -165,6 +182,12 @@ public:
     void FoulDetection(); // 犯规检测
     void DefenceDetection(); // 防守检测
 
+    // 结合回放镜头与比分序列判断回放镜头中的事件类型
+    void DetectReplayEventType();
+
+    // 进行音频分类，获取音频事件
+    void GetAudioEvents();
+
 private:
     void DrawDetectedLines(cv::Mat &image, const std::vector<cv::Vec2f> &lines,
                            const cv::Scalar &color, const int width = 1);
@@ -197,7 +220,18 @@ private:
 
     int EditDistance(const std::string &str1, const std::string &str2);
 
+    // -------------------------------- 以下三个函数是事件判定的辅助函数 --------------------------------
+    // 根据前后比分变化判断是否是进球
+    int IsScore(FrameFeature const &ff1, FrameFeature const &ff2);
 
+    // 根据前后比分变化判断是否是失误或安全球
+    int IsMissOrSafety(FrameFeature const &ff1, FrameFeature const &ff2);
+
+    // 根据前后比分变化判断是否是犯规
+    int IsFoul(FrameFeature const &ff1, FrameFeature const &ff2);
+
+    // 根据前后比分变化判断是否存在事件
+    EventType CheckEventType(FrameFeature const &ff1, FrameFeature const &ff2, int &playerId);
 };
 
 #endif

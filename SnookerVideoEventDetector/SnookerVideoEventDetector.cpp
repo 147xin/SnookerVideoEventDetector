@@ -149,10 +149,10 @@ void SnookerVideoEventDetector::ReadReplayInfo() {
         lineStream >> start >> length;
         replayInfo.end.nStart = start;
         replayInfo.end.nLength = length;
-        videoInfo.replays.push_back(replayInfo);
+        videoInfo.rawReplays.push_back(replayInfo);
     }
     //构造判断某一帧是否是回放镜头帧的哈希表
-    for (vector<ReplayInfo>::const_iterator it = videoInfo.replays.cbegin(); it != videoInfo.replays.cend(); ++it) {
+    for (vector<ReplayInfo>::const_iterator it = videoInfo.rawReplays.cbegin(); it != videoInfo.rawReplays.cend(); ++it) {
         for (int frameNum = (*it).start.nStart; frameNum != (*it).start.nStart + (*it).start.nLength; ++frameNum) {
             videoInfo.replayCheckHashTab.insert((unsigned int) frameNum);
         }
@@ -2557,28 +2557,127 @@ void SnookerVideoEventDetector::HighScoreDetection() {
     }
 }
 
+// -------------------------------- 以下三个函数是事件判定的辅助函数 --------------------------------
+int SnookerVideoEventDetector::IsScore(const FrameFeature &ff1, const FrameFeature &ff2) {
+    // 球员1得分，球员2比分不变，击球权不变，球员1得到1到8分（考虑OCR漏掉记录的情况）
+    if (ff2.score1 - ff1.score1 > 0 && ff2.score1 - ff1.score1 < 9 && ff2.score2 == ff1.score2 && ff2.turn == ff1.turn && ff2.turn == 0) {
+        return 0;
+    }
+    // 球员2得分，球员1比分不变，击球权不变，球员2得到1到8分（考虑OCR漏掉记录的情况）
+    if (ff2.score2 - ff1.score2 > 0 && ff2.score2 - ff1.score2 < 9 && ff2.score1 == ff1.score1 && ff2.turn == ff1
+            .turn && ff2.turn == 1) {
+        return 1;
+    }
+    return -1;
+}
+
+int SnookerVideoEventDetector::IsMissOrSafety(const FrameFeature &ff1, const FrameFeature &ff2) {
+    // 球员1失误或安全球，双方比分不变，击球权从球员1交换至球员2
+    if (ff2.score1 == ff1.score1 && ff2.score2 == ff1.score2 && ff1.turn == 0 && ff2.turn == 1) {
+        return 0;
+    }
+    // 球员2失误或安全球，双方比分不变，击球权从球员2交换至球员1
+    if (ff2.score1 == ff1.score1 && ff2.score2 == ff1.score2 && ff1.turn == 1 && ff2.turn == 0) {
+        return 1;
+    }
+    return -1;
+}
+
+int SnookerVideoEventDetector::IsFoul(const FrameFeature &ff1, const FrameFeature &ff2) {
+    // 球员1犯规，击球权交换给球员2，球员2分数增加4到8分
+    if (ff2.score1 == ff1.score1 && ff2.score2 - ff1.score2 >= 4 && ff2.score2 - ff1.score2 <= 7 && ff1.turn == 0 && ff2.turn == 1) {
+        return 0;
+    }
+    // 球员2犯规，击球权交换给球员1，球员1分数增加4到8分
+    if (ff2.score2 == ff1.score2 && ff2.score1 - ff1.score1 >= 4 && ff2.score1 - ff1.score1 <= 7 && ff1.turn == 1 && ff2.turn == 0) {
+        return 1;
+    }
+    return -1;
+}
+// -------------------------------- 以上三个函数是事件判定的辅助函数 --------------------------------
+
+EventType SnookerVideoEventDetector::CheckEventType(FrameFeature const &ff1, FrameFeature const &ff2, int &playerId) {
+    if (-1 != (playerId = IsScore(ff1, ff2))) {
+        return SCORE;
+    }
+    else if (-1 != (playerId = IsFoul(ff1, ff2))) {
+        return FOUL;
+    }
+    else if (-1 != (playerId = IsMissOrSafety(ff1, ff2))) {
+        return MISS_OR_SAFETY;
+    }
+    return NOEVENT;
+}
 
 
+void SnookerVideoEventDetector::DetectReplayEventType() {
+    vector<FrameFeature>::const_iterator recordIt = videoInfo.frameFeatures.cbegin();
+    vector<ReplayInfo>::const_iterator replayIt = videoInfo.rawReplays.cbegin();
+    for (; replayIt != videoInfo.rawReplays.cend(); ++replayIt) {
+        int replayStart = (*replayIt).start.nStart;
+        int replayEnd = (*replayIt).end.nStart + (*replayIt).end.nLength - 1;
+        // 在比分序列中找到在replayStart之前和在replayEnd之后的比分记录
+        while (recordIt->frameId < replayStart && recordIt != videoInfo.frameFeatures.cend()) {
+            ++recordIt;
+        }
+        // 到达比分记录的末尾还未找到，或者不合法的recordIt位置，返回
+        if (recordIt == videoInfo.frameFeatures.cend() || recordIt == videoInfo.frameFeatures.cbegin()) {
+            Replay replay;
+            replay.start = (*replayIt).start.nStart;
+            replay.end = (*replayIt).end.nStart + (*replayIt).end.nLength - 1;
+            replay.eventType = UNKNOWN;
+            videoInfo.replays.push_back(replay);
+            return;
+        }
+        // 找到replayStart之前的比分记录
+        vector<FrameFeature>::const_iterator prevRecord = recordIt - 1;
+        // 开始找replayEnd之后的比分记录
+        while (recordIt < replayEnd && recordIt != videoInfo.frameFeatures.cend()) {
+            ++recordIt;
+        }
+        if (recordIt == videoInfo.frameFeatures.cend()) {
+            return;
+        }
+        // 找到replayEnd之后的比分记录
+        vector<FrameFeature>::const_iterator nextRecord = recordIt;
 
+        // 先看能不能从这两个回放镜头前后的比分记录进行事件判定
+        int playerId;
+        EventType type;
+        if (NOEVENT != (type = CheckEventType(*prevRecord, *nextRecord, playerId))) {
+            Replay replay;
+            replay.start = (*replayIt).start.nStart;
+            replay.end = (*replayIt).end.nStart + (*replayIt).end.nLength - 1;
+            replay.eventType = type;
+            replay.player = playerId;
+            videoInfo.replays.push_back(replay);
+        }
+            // 不能从这两个回放镜头前后的比分记录进行事件判定，开始往回放镜头之前的比分记录进行寻找
+        else {
+            // 将往前寻找的时间限定在15s以内
+            nextRecord = prevRecord + 1;
+            while ((replayIt->start).nStart - prevRecord->frameId < 15 * videoInfo.fps) {
+                --prevRecord;
+                --nextRecord;
+                if (NOEVENT != (type = CheckEventType(*prevRecord, *nextRecord, playerId))) {
+                    Replay replay;
+                    replay.start = (*replayIt).start.nStart;
+                    replay.end = (*replayIt).end.nStart + (*replayIt).end.nLength - 1;
+                    replay.eventType = type;
+                    replay.player = playerId;
+                    videoInfo.replays.push_back(replay);
+                }
+            }
+            // 找不到则标记为UNKNOWN
+            Replay replay;
+            replay.start = (*replayIt).start.nStart;
+            replay.end = (*replayIt).end.nStart + (*replayIt).end.nLength - 1;
+            replay.eventType = UNKNOWN;
+            videoInfo.replays.push_back(replay);
+        }
+    }
+}
 
+void SnookerVideoEventDetector::GetAudioEvents() {
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
